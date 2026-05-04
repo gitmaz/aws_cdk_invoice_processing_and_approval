@@ -280,7 +280,7 @@ The **installation guide** and a **local (dev) oriented** Docker walkthrough als
 
 ### Local (dev) setup checklist
 
-1. **Clone / cd** into [`invoice_processing_and_approval`](.) (this folder).
+1. **Clone / cd** into [`aws_cdk_invoice_processing_and_approval`](.) (this folder).
 2. **`docker compose build`** — builds `invoice-processing-node20:local` from [Dockerfile](./Dockerfile).
 3. **`docker compose run --rm node20 npm install`** — writes `node_modules` to the **host** mount (same folder); run this after pulling dependency changes.
 4. **`docker compose run --rm node20 npm run synth`** — confirms CDK + TypeScript without deploying.

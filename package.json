@@ -1,5 +1,5 @@
 {
-  "name": "invoice-processing-and-approval",
+  "name": "aws-cdk-invoice-processing-and-approval",
   "version": "0.1.0",
   "description": "CDK: S3→SQS→Step Functions+Textract, SES human review, Cognito JWT uploads, EventBridge analytics (see prompts.txt). Requires Node 20+. Deploy: npm install && npm run deploy:dev",
   "private": true,

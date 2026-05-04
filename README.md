@@ -27,7 +27,7 @@ TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3*
 ### 1. Open a terminal in this folder
 
 ```bash
-cd maz/aws/serverless/invoice_processing_and_approval
+cd maz/aws/serverless/aws_cdk_invoice_processing_and_approval
 ```
 
 (Adjust the path if your checkout layout differs.)
