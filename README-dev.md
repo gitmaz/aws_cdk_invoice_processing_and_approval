@@ -18,6 +18,7 @@ This document complements [README.md](./README.md). It explains **how the repo i
 10. [Operational checklist (AWS)](#operational-checklist-aws)
 11. [Snippets reference](#snippets-reference)
 12. [Node 20 via Docker (Windows and others)](#node-20-via-docker-windows-and-others)
+13. [Testing (Vitest + mock API)](./README-test.md)
 
 ---
 

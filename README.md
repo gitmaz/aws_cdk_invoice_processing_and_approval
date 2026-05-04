@@ -148,3 +148,5 @@ More detail and reasoning: [README-dev.md — Node 20 via Docker](./README-dev.m
 ---
 
 For architecture, security model, Step Functions behaviour, and navigable links into source files, see **[README-dev.md](./README-dev.md)**.
+
+**Local testing (mock API + Vitest, no AWS):** **[README-test.md](./README-test.md)**.

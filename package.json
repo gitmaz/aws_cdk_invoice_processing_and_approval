@@ -19,14 +19,18 @@
     "docker:build": "docker compose build",
     "docker:sh": "docker compose run --rm node20 bash",
     "docker:install": "docker compose run --rm node20 npm install",
-    "docker:synth": "docker compose run --rm node20 npm run synth"
+    "docker:synth": "docker compose run --rm node20 npm run synth",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "demo:api": "node local/mock-public-api.cjs"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",
     "@types/node": "^20.14.0",
     "aws-cdk": "^2.170.0",
     "esbuild": "^0.24.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.683.0",
