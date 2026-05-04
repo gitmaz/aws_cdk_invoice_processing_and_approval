@@ -1,0 +1,7 @@
+{
+  "sesFromAddress": "verified-sender@yourdomain.com",
+  "humanReviewNotifyEmails": ["reviewer@yourdomain.com"],
+  "rejectionNotifyEmails": ["finance@yourdomain.com"],
+  "spaBaseUrl": "http://localhost:5173",
+  "ocrConfidenceThreshold": 85
+}

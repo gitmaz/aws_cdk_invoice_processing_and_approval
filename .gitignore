@@ -1,1 +1,8 @@
 prompts.txt
+
+node_modules/
+cdk.out/
+dist/
+
+spa/node_modules/
+spa/dist/

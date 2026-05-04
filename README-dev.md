@@ -1,0 +1,333 @@
+# Developer guide — invoice processing & approval
+
+This document complements [README.md](./README.md). It explains **how the repo is organized**, **how to run and configure** it, and **why** the main design choices were made. File paths use **relative links** so they stay clickable in **VS Code** (Markdown preview: `Ctrl+Shift+V` / `Cmd+Shift+V`).
+
+---
+
+## Table of contents
+
+1. [Goals and source of requirements](#goals-and-source-of-requirements)
+2. [Repository map](#repository-map)
+3. [CDK app entry and stack wiring](#cdk-app-entry-and-stack-wiring)
+4. [Configuration layers](#configuration-layers)
+5. [End-to-end runtime flow](#end-to-end-runtime-flow)
+6. [Step Functions design](#step-functions-design)
+7. [Security model](#security-model)
+8. [DynamoDB and EventBridge contracts](#dynamodb-and-eventbridge-contracts)
+9. [HTTP API and SPA](#http-api-and-spa)
+10. [Operational checklist (AWS)](#operational-checklist-aws)
+11. [Snippets reference](#snippets-reference)
+12. [Node 20 via Docker (Windows and others)](#node-20-via-docker-windows-and-others)
+
+---
+
+## Goals and source of requirements
+
+The behaviour is driven by the product notes in **`prompts.txt`** (gitignored). In short we aimed for:
+
+- **Separation of concerns**: invoice workflow vs analytics so blast radius and redeploy scope stay smaller.
+- **Managed OCR**: **Textract `AnalyzeExpense`** instead of custom OCR in Lambda — fewer moving parts and stronger invoice-oriented output.
+- **Human-in-the-loop**: Step Functions **`WAIT_FOR_TASK_TOKEN`** so the workflow pauses until the reviewer completes the SPA; resume uses **`SendTaskSuccess`** with a structured payload.
+- **Reliability**: SQS (+ DLQ) between S3 and workflow start, retries on Lambda invoke where appropriate, explicit timeout path for human review.
+- **Observability**: Step Functions logging/tracing enabled on the state machine.
+
+---
+
+## Repository map
+
+| Path | Role |
+| ---- | ---- |
+| [bin/invoice-app.ts](./bin/invoice-app.ts) | CDK `App`, stage + context, instantiates both stacks |
+| [lib/invoice-processing-stack.ts](./lib/invoice-processing-stack.ts) | Main workflow: S3, SQS, Lambdas, Step Functions, API, Cognito |
+| [lib/analytics-stack.ts](./lib/analytics-stack.ts) | Custom EventBridge bus + rule + analytics Lambda + table |
+| [lib/stage-config.ts](./lib/stage-config.ts) | Merged stage config (defaults + `cdk.json` + optional `config/<stage>.json`) |
+| [lambda/](./lambda/) | Runtime handlers (one folder per function entry) |
+| [lambda/shared/outcomes.ts](./lambda/shared/outcomes.ts) | Shared `PutEvents` helper for invoice outcomes |
+| [spa/](./spa/) | Vite + React approval UI |
+| [cdk.json](./cdk.json) | CDK app command + `context.invoice.*` defaults |
+| [config/example.dev.json](./config/example.dev.json) | Template for gitignored per-stage overrides |
+
+---
+
+## CDK app entry and stack wiring
+
+The app reads **`stage`** from context (default **`dev`**) and merges **`invoice`** overrides from CDK context before constructing stacks.
+
+**Why analytics first?** The invoice stack needs an **`IEventBus`** reference to grant **`PutEvents`** on the **same** bus the analytics rule listens to. The app wires [`analyticsStack.eventBus`](./bin/invoice-app.ts) into [`InvoiceProcessingStack`](./lib/invoice-processing-stack.ts) and declares a **stack dependency** so deploy order is safe.
+
+```typescript
+// bin/invoice-app.ts (excerpt)
+const stage = app.node.tryGetContext("stage") ?? "dev";
+const config = loadStageConfig(stage, {
+  invoice: app.node.tryGetContext("invoice") as Record<string, InvoiceContextOverrides> | undefined,
+});
+
+const analyticsStack = new AnalyticsStack(app, `InvoiceAnalytics-${stage}`, { /* ... */ });
+const invoiceStack = new InvoiceProcessingStack(app, `InvoiceProcessing-${stage}`, {
+  analyticsEventBus: analyticsStack.eventBus,
+  /* ... */
+});
+invoiceStack.addDependency(analyticsStack);
+```
+
+Files: [bin/invoice-app.ts](./bin/invoice-app.ts), [lib/analytics-stack.ts](./lib/analytics-stack.ts), [lib/invoice-processing-stack.ts](./lib/invoice-processing-stack.ts).
+
+---
+
+## Configuration layers
+
+Configuration is merged in [`loadStageConfig`](./lib/stage-config.ts):
+
+1. **Sensible defaults** (threshold differs by stage: prod stricter than dev).
+2. **`cdk.json` → `context.invoice.<stage>`** — versioned, non-secret knobs (e.g. OCR threshold, SPA base URL hint).
+3. **Optional `config/<stage>.json`** — gitignored via [config/.gitignore](./config/.gitignore); use [config/example.dev.json](./config/example.dev.json) as a template for SES addresses and recipient lists.
+
+**Why three layers?** Repo defaults keep `cdk synth` usable without secrets; `cdk.json` documents team conventions; local JSON supports developer-specific emails and URLs without committing PII.
+
+**SSM:** [`StageConfig.ssmParameterPrefix`](./lib/stage-config.ts) documents a **recommended namespace** (`/invoice-pipeline/<stage>`) if you later move secrets or tunables to Parameter Store and read them from Lambdas at runtime (not wired by default, to keep the baseline deploy simple).
+
+---
+
+## End-to-end runtime flow
+
+```mermaid
+flowchart LR
+  subgraph upload [Authenticated upload]
+    C[Cognito JWT]
+    P[POST /upload/presign]
+    S3[(S3 invoices bucket)]
+    C --> P --> S3
+  end
+  subgraph ingest [Ingestion]
+    Q[SQS]
+    L[ingest Lambda]
+    SFN[Step Functions]
+    S3 --> Q --> L --> SFN
+  end
+  subgraph ocr [OCR / decision]
+    V[validate Lambda Textract]
+    SFN --> V
+  end
+  subgraph human [Human path]
+    N[notify Lambda SES]
+    SP[React SPA]
+    API[public-api Lambda]
+    N --> SP
+    SP --> API
+    API -->|SendTaskSuccess| SFN
+  end
+  subgraph analytics [Analytics stack]
+    EB[EventBridge bus]
+    AN[analytics-ingest Lambda]
+    DBA[(invoice-analytics table)]
+    EB --> AN --> DBA
+  end
+  SFN --> EB
+```
+
+1. **Upload**: JWT-protected presign ([`presign-upload`](./lambda/presign-upload/index.ts), route wired in [`invoice-processing-stack.ts`](./lib/invoice-processing-stack.ts)) returns PUT URL; client uploads file → **S3** triggers **SQS** (decoupling + back-pressure).
+2. **Ingest**: [`lambda/ingest`](./lambda/ingest/index.ts) starts an execution with bucket/key and a new `invoiceId`.
+3. **Validate**: [`lambda/validate`](./lambda/validate/index.ts) reads the object, runs **Textract**, writes **`invoice-records-*`**, sets `needsHumanReview` vs threshold.
+4. **Branch**: Step Functions **Choice** — auto path vs notify + **wait for task token**.
+5. **Human**: Notify stores **`reviewSessionId`** + task token fields on the invoice row and emails a link whose query string matches what [`spa/src/App.tsx`](./spa/src/App.tsx) expects (`invoiceId`, `session`). **`public-api`** validates session, then calls **`SendTaskSuccess`**.
+6. **Finalize**: Lambdas under [`finalize-auto`](./lambda/finalize-auto/index.ts), [`finalize-human-approve`](./lambda/finalize-human-approve/index.ts), [`finalize-human-reject`](./lambda/finalize-human-reject/index.ts) update DynamoDB and emit **`InvoiceOutcome`** events.
+7. **Analytics**: [`lambda/analytics-ingest`](./lambda/analytics-ingest/index.ts) increments counters on the analytics table (see [EventBridge contracts](#dynamodb-and-eventbridge-contracts)).
+
+---
+
+## Step Functions design
+
+Definition lives in [`lib/invoice-processing-stack.ts`](./lib/invoice-processing-stack.ts).
+
+| Piece | Rationale |
+| ----- | --------- |
+| **`ValidateInvoiceTask`** with `resultPath: $.validated` | Keeps the raw execution input (bucket, key, ids) while nesting validation output for choices and notify payload. |
+| **Retry on Lambda service exceptions** | Textract / Lambda transient failures get exponential backoff without failing the whole workflow immediately. |
+| **Choice on `$.validated.needsHumanReview`** | Single source of truth from the validator (Textract confidence vs threshold). |
+| **`WAIT_FOR_TASK_TOKEN` + `taskTimeout` (7 days)** | Standard pattern for human approval; timeout maps to a **`States.Timeout`** catch → **`Fail`** state so executions do not hang forever. |
+| **Choice on `$.action` after wait** | The callback output from `SendTaskSuccess` **replaces** the state input for the next state, so branches key off flat `APPROVE` / `REJECT` strings. |
+| **Finalize lambdas read `invoiceId` + DynamoDB** | We do not rely on merging large SFN state across the wait; the DB is the system of record for context. |
+
+Pointer: chain assembly — [`validateTask` → `needsHuman` → `notifyTask` → `humanChoice`](./lib/invoice-processing-stack.ts).
+
+---
+
+## Security model
+
+| Surface | Mechanism | Why |
+| ------- | --------- | --- |
+| **Upload presign** | **HTTP API JWT** authorizer + Cognito pool/client ([`HttpJwtAuthorizer`](./lib/invoice-processing-stack.ts)) | Only authenticated users can obtain PUT URLs; bucket stays private. |
+| **Human approval API** | **No Cognito** on `/public/*`; **`invoiceId` + `session`** must match the row written during notify ([`public-api`](./lambda/public-api/index.ts)) | Approvers come from an email link; forcing Cognito login there would add friction; **session id** is the capability token for that review. |
+| **Step Functions task token** | Stored server-side on the invoice record; never placed in the email URL | Reduces leak risk vs embedding the raw task token in query strings. |
+| **IAM** | `states:SendTaskSuccess` scoped in practice to completing human steps ([policy on `publicApiFn`](./lib/invoice-processing-stack.ts)) | Required for the callback pattern from API Gateway Lambda. |
+
+---
+
+## DynamoDB and EventBridge contracts
+
+**Invoices table** (`invoice-records-<stage>`): partition key **`invoiceId`**. Notable attributes include status lifecycle (`NEEDS_REVIEW` → `AWAITING_HUMAN` → …), `reviewSessionId`, `taskToken` (while waiting), and serialized OCR payload. See [`lambda/validate`](./lambda/validate/index.ts), [`lambda/notify-human`](./lambda/notify-human/index.ts), [`lambda/public-api`](./lambda/public-api/index.ts).
+
+**Analytics table** (`invoice-analytics-<stage>`): composite key **`pk` / `sk`**. Ingest Lambda increments **`autoApproved` / `approved` / `rejected`** on totals and per-day keys. See [`lambda/analytics-ingest/index.ts`](./lambda/analytics-ingest/index.ts).
+
+**EventBridge**: source **`invoice.processing`**, detail-type **`InvoiceOutcome`**, emitted from [`lambda/shared/outcomes.ts`](./lambda/shared/outcomes.ts), matched by the rule in [`lib/analytics-stack.ts`](./lib/analytics-stack.ts).
+
+---
+
+## HTTP API and SPA
+
+| Route | Auth | Handler |
+| ----- | ---- | ------- |
+| `GET /public/invoice/{invoiceId}` | Public (session query validates) | [`lambda/public-api`](./lambda/public-api/index.ts) |
+| `POST /public/decision` | Public (session + task token in DB) | same |
+| `POST /upload/presign` | JWT (Cognito) | [`lambda/presign-upload`](./lambda/presign-upload/index.ts) |
+
+**SPA**: [`spa/src/App.tsx`](./spa/src/App.tsx) reads `invoiceId` and `session` from the query string and uses `import.meta.env.VITE_API_BASE_URL` as the API prefix.
+
+### Local SPA against a deployed API
+
+```bash
+cd spa
+npm install
+set VITE_API_BASE_URL=https://xxxx.execute-api....amazonaws.com   # Windows
+npm run dev
+```
+
+**CORS** on the HTTP API is open for dev (`allowOrigins: ["*"]` in [`invoice-processing-stack.ts`](./lib/invoice-processing-stack.ts)); tighten for production (specific SPA origin + credentials policy if you add cookies).
+
+---
+
+## Operational checklist (AWS)
+
+- **SES**: Verify sender (`sesFromAddress`) and recipients if still in **sandbox**; production sending may need moving out of sandbox.
+- **Cognito**: Create test users (password/SRP enabled on the app client) to call **`/upload/presign`**.
+- **Textract + S3**: Lambdas use IAM permissions already attached in the stack; large PDFs may need async Textract in a future iteration (current code uses synchronous `AnalyzeExpense` on downloaded bytes).
+- **Quotas**: Step Functions open executions, SQS visibility, and API Gateway limits apply under load.
+
+---
+
+## Snippets reference
+
+### CDK: human notify + task token payload
+
+From [`lib/invoice-processing-stack.ts`](./lib/invoice-processing-stack.ts):
+
+```typescript
+const notifyTask = new tasks.LambdaInvoke(this, "NotifyHumanTask", {
+  lambdaFunction: notifyFn,
+  integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+  payload: sfn.TaskInput.fromObject({
+    "bucket.$": "$.validated.bucket",
+    "key.$": "$.validated.key",
+    "invoiceId.$": "$.validated.invoiceId",
+    "stage.$": "$.validated.stage",
+    "minConfidence.$": "$.validated.minConfidence",
+    "needsHumanReview.$": "$.validated.needsHumanReview",
+    "taskToken.$": "$$.Task.Token",
+  }),
+  taskTimeout: sfn.Timeout.duration(cdk.Duration.days(7)),
+});
+```
+
+### Lambda: resume workflow from API
+
+From [`lambda/public-api/index.ts`](./lambda/public-api/index.ts):
+
+```typescript
+await sfn.send(
+  new SendTaskSuccessCommand({
+    taskToken: token,
+    output: JSON.stringify(output),
+  }),
+);
+```
+
+### Emit analytics event
+
+From [`lambda/shared/outcomes.ts`](./lambda/shared/outcomes.ts):
+
+```typescript
+await eb.send(
+  new PutEventsCommand({
+    Entries: [
+      {
+        EventBusName: params.eventBusName,
+        Source: "invoice.processing",
+        DetailType: "InvoiceOutcome",
+        Detail: JSON.stringify({
+          invoiceId: params.invoiceId,
+          outcome: params.outcome,
+          stage: params.stage,
+          reason: params.reason,
+          ts: new Date().toISOString(),
+        }),
+      },
+    ],
+  }),
+);
+```
+
+---
+
+## Node 20 via Docker (Windows and others)
+
+The app targets **Node 20** (see [package.json](./package.json) `engines`). If your Windows install is still on **Node 18**, use the included image so `npm` / `cdk` / `esbuild` run on **Node 20** without changing the host.
+
+The **installation guide** and a **local (dev) oriented** Docker walkthrough also live in [README.md](./README.md) ([Installation guide](./README.md#installation-guide), [Local development with Docker (dev)](./README.md#local-development-with-docker-dev)).
+
+**Files:** [Dockerfile](./Dockerfile), [docker-compose.yml](./docker-compose.yml), [.dockerignore](./.dockerignore).
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine) with Compose v2.
+
+### Local (dev) setup checklist
+
+1. **Clone / cd** into [`invoice_processing_and_approval`](.) (this folder).
+2. **`docker compose build`** — builds `invoice-processing-node20:local` from [Dockerfile](./Dockerfile).
+3. **`docker compose run --rm node20 npm install`** — writes `node_modules` to the **host** mount (same folder); run this after pulling dependency changes.
+4. **`docker compose run --rm node20 npm run synth`** — confirms CDK + TypeScript without deploying.
+5. **Deploy (optional):** set `CDK_DEFAULT_ACCOUNT` / `CDK_DEFAULT_REGION` on the host or use `-e` / mounted `~/.aws` (see PowerShell example below).
+6. **SPA:** for UI-only work, [`spa/`](./spa) often runs with host `npm run dev`; point `VITE_API_BASE_URL` at the deployed `HttpApiUrl`. See [HTTP API and SPA](#http-api-and-spa).
+
+### Commands reference
+
+**Build the image** (from this directory):
+
+```bash
+docker compose build
+```
+
+**One-off commands** (repo mounted at `/app`; `node_modules` is on your disk, so installs persist):
+
+```bash
+docker compose run --rm node20 npm install
+docker compose run --rm node20 npm run synth
+```
+
+**Interactive shell** (Node 20 + same repo):
+
+```bash
+docker compose run --rm node20 bash
+# then: node -v   # v20.x
+#      npm run deploy:dev
+```
+
+**PowerShell** (same as above; ensure you `cd` to the project folder first). For **AWS deploy from the container**, mount your AWS config or pass env vars. The compose file forwards `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`, and `AWS_REGION` if set in the host environment. Mount credentials on Windows, for example:
+
+```powershell
+docker compose run --rm `
+  -v "${env:USERPROFILE}\.aws:/root/.aws:ro" `
+  node20 npm run synth
+```
+
+Adjust the left side of the volume if your profile directory differs.
+
+**Why Docker here:** aligns local toolchain with Lambda **nodejs20.x** and avoids engine mismatch warnings from npm without upgrading the global Windows Node install.
+
+Shortcut scripts (optional): see `docker:*` entries in [package.json](./package.json).
+
+---
+
+## Related reading
+
+- [README.md](./README.md) — short overview and quick start  
+- [package.json](./package.json) — scripts (`deploy:dev`, `synth`, `spa:build`, `docker:*`)  
+- [cdk.json](./cdk.json) — `context.invoice` defaults per stage  

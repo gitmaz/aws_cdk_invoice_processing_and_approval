@@ -1,0 +1,16 @@
+# Node 20 dev shell with repo bind-mounted at /app (Docker Desktop on Windows works with `.:/app`).
+services:
+  node20:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: invoice-processing-node20:local
+    working_dir: /app
+    volumes:
+      - .:/app
+    stdin_open: true
+    tty: true
+    environment:
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      CDK_DEFAULT_ACCOUNT: ${CDK_DEFAULT_ACCOUNT:-}
+      CDK_DEFAULT_REGION: ${CDK_DEFAULT_REGION:-us-east-1}

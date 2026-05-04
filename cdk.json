@@ -1,0 +1,38 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/invoice-app.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package*.json",
+      "node_modules",
+      "spa"
+    ]
+  },
+  "context": {
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
+    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
+    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "invoice": {
+      "dev": {
+        "spaBaseUrl": "http://localhost:5173",
+        "ocrConfidenceThreshold": 82
+      },
+      "test": {
+        "ocrConfidenceThreshold": 88
+      },
+      "prod": {
+        "ocrConfidenceThreshold": 92
+      }
+    }
+  }
+}
