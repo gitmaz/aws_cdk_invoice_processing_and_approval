@@ -23,10 +23,11 @@ This document complements [README.md](./README.md). It explains **how the repo i
 
 ## Goals and source of requirements
 
-The behaviour is driven by the product notes in **`prompts.txt`** (gitignored). In short we aimed for:
+The behaviour is driven by the product notes in **`prompts.txt`**. In short we aimed for:
 
 - **Separation of concerns**: invoice workflow vs analytics so blast radius and redeploy scope stay smaller.
 - **Managed OCR**: **Textract `AnalyzeExpense`** instead of custom OCR in Lambda — fewer moving parts and stronger invoice-oriented output.
+- **Human approval always**: OCR confidence does **not** auto-approve. **`ocrConfidenceThreshold`** only selects SPA mode: **below threshold** → manual verification + approve/reject; **at/above** → trust OCR for display (automatic verification) but reviewer still must **explicitly approve or reject**.
 - **Human-in-the-loop**: Step Functions **`WAIT_FOR_TASK_TOKEN`** so the workflow pauses until the reviewer completes the SPA; resume uses **`SendTaskSuccess`** with a structured payload.
 - **Reliability**: SQS (+ DLQ) between S3 and workflow start, retries on Lambda invoke where appropriate, explicit timeout path for human review.
 - **Observability**: Step Functions logging/tracing enabled on the state machine.
@@ -104,11 +105,10 @@ flowchart LR
     SFN[Step Functions]
     S3 --> Q --> L --> SFN
   end
-  subgraph ocr [OCR / decision]
+  subgraph ocr [OCR + SPA mode flag]
     V[validate Lambda Textract]
-    SFN --> V
   end
-  subgraph human [Human path]
+  subgraph human [Human path — always]
     N[notify Lambda SES]
     SP[React SPA]
     API[public-api Lambda]
@@ -123,14 +123,16 @@ flowchart LR
     EB --> AN --> DBA
   end
   SFN --> EB
+  SFN --> V
+  V --> N
 ```
 
 1. **Upload**: JWT-protected presign ([`presign-upload`](./lambda/presign-upload/index.ts), route wired in [`invoice-processing-stack.ts`](./lib/invoice-processing-stack.ts)) returns PUT URL; client uploads file → **S3** triggers **SQS** (decoupling + back-pressure).
 2. **Ingest**: [`lambda/ingest`](./lambda/ingest/index.ts) starts an execution with bucket/key and a new `invoiceId`.
-3. **Validate**: [`lambda/validate`](./lambda/validate/index.ts) reads the object, runs **Textract**, writes **`invoice-records-*`**, sets `needsHumanReview` vs threshold.
-4. **Branch**: Step Functions **Choice** — auto path vs notify + **wait for task token**.
+3. **Validate**: [`lambda/validate`](./lambda/validate/index.ts) reads the object, runs **Textract**, writes **`invoice-records-*`**, sets **`manualVerificationRequired`** when confidence is **below** [`ocrConfidenceThreshold`](./lib/stage-config.ts) (SPA editing vs read-only).
+4. **Notify + wait**: Every invoice goes through **SES** + **`WAIT_FOR_TASK_TOKEN`** (no OCR-only auto-approve).
 5. **Human**: Notify stores **`reviewSessionId`** + task token fields on the invoice row and emails a link whose query string matches what [`spa/src/App.tsx`](./spa/src/App.tsx) expects (`invoiceId`, `session`). **`public-api`** validates session, then calls **`SendTaskSuccess`**.
-6. **Finalize**: Lambdas under [`finalize-auto`](./lambda/finalize-auto/index.ts), [`finalize-human-approve`](./lambda/finalize-human-approve/index.ts), [`finalize-human-reject`](./lambda/finalize-human-reject/index.ts) update DynamoDB and emit **`InvoiceOutcome`** events.
+6. **Finalize**: Lambdas [`finalize-human-approve`](./lambda/finalize-human-approve/index.ts) / [`finalize-human-reject`](./lambda/finalize-human-reject/index.ts) update DynamoDB and emit **`InvoiceOutcome`** events.
 7. **Analytics**: [`lambda/analytics-ingest`](./lambda/analytics-ingest/index.ts) increments counters on the analytics table (see [EventBridge contracts](#dynamodb-and-eventbridge-contracts)).
 
 ---
@@ -143,12 +145,12 @@ Definition lives in [`lib/invoice-processing-stack.ts`](./lib/invoice-processing
 | ----- | --------- |
 | **`ValidateInvoiceTask`** with `resultPath: $.validated` | Keeps the raw execution input (bucket, key, ids) while nesting validation output for choices and notify payload. |
 | **Retry on Lambda service exceptions** | Textract / Lambda transient failures get exponential backoff without failing the whole workflow immediately. |
-| **Choice on `$.validated.needsHumanReview`** | Single source of truth from the validator (Textract confidence vs threshold). |
+| **No branch on OCR for “auto-approve”** | After validate, the state machine **always** continues to **notify** + **wait**; `manualVerificationRequired` is only for the **SPA** (and email copy). |
 | **`WAIT_FOR_TASK_TOKEN` + `taskTimeout` (7 days)** | Standard pattern for human approval; timeout maps to a **`States.Timeout`** catch → **`Fail`** state so executions do not hang forever. |
 | **Choice on `$.action` after wait** | The callback output from `SendTaskSuccess` **replaces** the state input for the next state, so branches key off flat `APPROVE` / `REJECT` strings. |
 | **Finalize lambdas read `invoiceId` + DynamoDB** | We do not rely on merging large SFN state across the wait; the DB is the system of record for context. |
 
-Pointer: chain assembly — [`validateTask` → `needsHuman` → `notifyTask` → `humanChoice`](./lib/invoice-processing-stack.ts).
+Pointer: chain assembly — [`validateTask` → `notifyTask` → `humanChoice`](./lib/invoice-processing-stack.ts).
 
 ---
 
@@ -165,7 +167,7 @@ Pointer: chain assembly — [`validateTask` → `needsHuman` → `notifyTask` �
 
 ## DynamoDB and EventBridge contracts
 
-**Invoices table** (`invoice-records-<stage>`): partition key **`invoiceId`**. Notable attributes include status lifecycle (`NEEDS_REVIEW` → `AWAITING_HUMAN` → …), `reviewSessionId`, `taskToken` (while waiting), and serialized OCR payload. See [`lambda/validate`](./lambda/validate/index.ts), [`lambda/notify-human`](./lambda/notify-human/index.ts), [`lambda/public-api`](./lambda/public-api/index.ts).
+**Invoices table** (`invoice-records-<stage>`): partition key **`invoiceId`**. Notable attributes include status lifecycle (`PENDING_HUMAN_APPROVAL` → `AWAITING_HUMAN` → …), **`manualVerificationRequired`**, `reviewSessionId`, `taskToken` (while waiting), and serialized OCR payload. See [`lambda/validate`](./lambda/validate/index.ts), [`lambda/notify-human`](./lambda/notify-human/index.ts), [`lambda/public-api`](./lambda/public-api/index.ts).
 
 **Analytics table** (`invoice-analytics-<stage>`): composite key **`pk` / `sk`**. Ingest Lambda increments **`autoApproved` / `approved` / `rejected`** on totals and per-day keys. See [`lambda/analytics-ingest/index.ts`](./lambda/analytics-ingest/index.ts).
 
@@ -221,7 +223,7 @@ const notifyTask = new tasks.LambdaInvoke(this, "NotifyHumanTask", {
     "invoiceId.$": "$.validated.invoiceId",
     "stage.$": "$.validated.stage",
     "minConfidence.$": "$.validated.minConfidence",
-    "needsHumanReview.$": "$.validated.needsHumanReview",
+    "manualVerificationRequired.$": "$.validated.manualVerificationRequired",
     "taskToken.$": "$$.Task.Token",
   }),
   taskTimeout: sfn.Timeout.duration(cdk.Duration.days(7)),

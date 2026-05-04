@@ -13,7 +13,8 @@ type Ev = {
   invoiceId: string;
   stage: string;
   minConfidence: number;
-  needsHumanReview: boolean;
+  /** When true, reviewer must correct/verify OCR on the SPA before approving. */
+  manualVerificationRequired: boolean;
   taskToken: string;
 };
 
@@ -52,10 +53,15 @@ export const handler = async (event: Ev) => {
 
   const approveUrl = `${spaBase}/?invoiceId=${encodeURIComponent(event.invoiceId)}&session=${encodeURIComponent(reviewSessionId)}`;
 
+  const modeHint = event.manualVerificationRequired
+    ? "Manual verification is required: please check and correct the extracted values on the form, then approve or reject."
+    : "OCR confidence is high: values are pre-verified; please review and explicitly approve or reject (no auto-approval).";
+
   const bodyText = [
-    `Invoice ${event.invoiceId} needs human review.`,
-    `Lowest detected field confidence: ${event.minConfidence.toFixed(1)}.`,
-    `Open the approval form: ${approveUrl}`,
+    `Invoice ${event.invoiceId} is ready for your decision.`,
+    modeHint,
+    `Lowest field confidence: ${event.minConfidence.toFixed(1)}.`,
+    `Open the form: ${approveUrl}`,
     ``,
     `This link is single-session and should be treated as sensitive.`,
   ].join("\n");
@@ -66,7 +72,7 @@ export const handler = async (event: Ev) => {
         Source: from,
         Destination: { ToAddresses: notifyList },
         Message: {
-          Subject: { Data: `[Invoice] Review required — ${event.invoiceId}` },
+          Subject: { Data: `[Invoice] Action required — ${event.invoiceId}` },
           Body: { Text: { Data: bodyText } },
         },
       }),

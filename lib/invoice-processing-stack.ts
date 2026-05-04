@@ -93,14 +93,6 @@ export class InvoiceProcessingStack extends cdk.Stack {
       environment: { ...commonLambdaEnv },
     });
 
-    const finalizeAutoFn = new NodejsFunction(this, "FinalizeAutoFn", {
-      ...lambdaDefaults,
-      entry: path.join(__dirname, "..", "lambda", "finalize-auto", "index.ts"),
-      handler: "handler",
-      timeout: cdk.Duration.seconds(30),
-      environment: { ...commonLambdaEnv },
-    });
-
     const finalizeApproveFn = new NodejsFunction(this, "FinalizeHumanApproveFn", {
       ...lambdaDefaults,
       entry: path.join(__dirname, "..", "lambda", "finalize-human-approve", "index.ts"),
@@ -119,7 +111,6 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     invoicesTable.grantReadWriteData(validateFn);
     invoicesTable.grantReadWriteData(notifyFn);
-    invoicesTable.grantReadWriteData(finalizeAutoFn);
     invoicesTable.grantReadWriteData(finalizeApproveFn);
     invoicesTable.grantReadWriteData(finalizeRejectFn);
 
@@ -144,7 +135,6 @@ export class InvoiceProcessingStack extends cdk.Stack {
       }),
     );
 
-    props.analyticsEventBus.grantPutEventsTo(finalizeAutoFn);
     props.analyticsEventBus.grantPutEventsTo(finalizeApproveFn);
     props.analyticsEventBus.grantPutEventsTo(finalizeRejectFn);
 
@@ -160,14 +150,6 @@ export class InvoiceProcessingStack extends cdk.Stack {
       backoffRate: 2,
     });
 
-    const finalizeAutoTask = new tasks.LambdaInvoke(this, "FinalizeAutoTask", {
-      lambdaFunction: finalizeAutoFn,
-      payload: sfn.TaskInput.fromJsonPathAt("$"),
-      resultPath: "$.finalizeAuto",
-    }).addCatch(new sfn.Fail(this, "AutoFinalizeFailed", { error: "AutoFinalizeFailed" }), {
-      resultPath: "$.error",
-    });
-
     const notifyTask = new tasks.LambdaInvoke(this, "NotifyHumanTask", {
       lambdaFunction: notifyFn,
       integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
@@ -177,7 +159,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
         "invoiceId.$": "$.validated.invoiceId",
         "stage.$": "$.validated.stage",
         "minConfidence.$": "$.validated.minConfidence",
-        "needsHumanReview.$": "$.validated.needsHumanReview",
+        "manualVerificationRequired.$": "$.validated.manualVerificationRequired",
         "taskToken.$": "$$.Task.Token",
       }),
       taskTimeout: sfn.Timeout.duration(cdk.Duration.days(7)),
@@ -210,11 +192,8 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     notifyTask.next(humanChoice);
 
-    const needsHuman = new sfn.Choice(this, "NeedsHumanReview")
-      .when(sfn.Condition.booleanEquals("$.validated.needsHumanReview", true), notifyTask)
-      .otherwise(finalizeAutoTask);
-
-    const definition = validateTask.next(needsHuman);
+    /** Always require human approve/reject; OCR threshold only affects SPA manual verify vs approval-only UI. */
+    const definition = validateTask.next(notifyTask);
 
     const stateMachine = new sfn.StateMachine(this, "InvoiceStateMachine", {
       stateMachineName: `invoice-processing-${stage}`,

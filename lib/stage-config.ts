@@ -4,7 +4,10 @@ import * as path from "path";
 /** Resolved settings for a deployment stage (defaults + optional CDK context + optional config file). */
 export interface StageConfig {
   stage: string;
-  /** Minimum field confidence (0–100) from Textract to auto-approve without human review. */
+  /**
+   * Field confidence threshold (0–100). Below = SPA requires manual verification of OCR before approve.
+   * At/above = extraction trusted for display (verification automatic); human must still approve/reject explicitly.
+   */
   ocrConfidenceThreshold: number;
   /** SES From address (must be verified in SES for the account/region). */
   sesFromAddress: string;

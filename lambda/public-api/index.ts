@@ -39,6 +39,8 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       invoiceId,
       minConfidence: item.minConfidence,
       status: item.status,
+      /** false = high OCR confidence: show approval-only UI; true = require manual field verification before approve. */
+      manualVerificationRequired: item.manualVerificationRequired === true,
       ocrSummary: ocr,
     });
   }

@@ -40,7 +40,8 @@ export const handler = async (input: In) => {
   );
 
   const minConfidence = minConfidenceFromAnalyze(analyze);
-  const needsHumanReview = minConfidence < threshold;
+  /** Below threshold: SPA requires manual correction of OCR fields before approve. At/above: verification automatic; human still must approve. */
+  const manualVerificationRequired = minConfidence < threshold;
 
   await doc.send(
     new PutCommand({
@@ -50,8 +51,9 @@ export const handler = async (input: In) => {
         bucket: input.bucket,
         objectKey: input.key,
         stage: input.stage,
-        status: needsHumanReview ? "NEEDS_REVIEW" : "ELIGIBLE_AUTO",
+        status: "PENDING_HUMAN_APPROVAL",
         minConfidence,
+        manualVerificationRequired,
         ocrSummary: JSON.stringify({
           expenseDocuments: analyze.ExpenseDocuments ?? [],
         }),
@@ -63,7 +65,7 @@ export const handler = async (input: In) => {
   return {
     ...input,
     minConfidence,
-    needsHumanReview,
+    manualVerificationRequired,
     threshold,
   };
 };

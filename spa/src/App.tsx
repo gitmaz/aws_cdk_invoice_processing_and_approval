@@ -6,19 +6,24 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(window.location.search), []);
 }
 
+type InvoicePayload = {
+  minConfidence?: number;
+  ocrSummary?: unknown;
+  status?: string;
+  manualVerificationRequired?: boolean;
+};
+
 export default function App() {
   const q = useQuery();
   const invoiceId = q.get("invoiceId") ?? "";
   const session = q.get("session") ?? "";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<{
-    minConfidence?: number;
-    ocrSummary?: unknown;
-    status?: string;
-  } | null>(null);
+  const [data, setData] = useState<InvoicePayload | null>(null);
   const [reason, setReason] = useState("");
   const [editedJson, setEditedJson] = useState("");
+
+  const needManualVerify = data?.manualVerificationRequired === true;
 
   useEffect(() => {
     if (!invoiceId || !session) {
@@ -31,8 +36,8 @@ export default function App() {
         const r = await fetch(
           `${apiBase}/public/invoice/${encodeURIComponent(invoiceId)}?session=${encodeURIComponent(session)}`,
         );
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error ?? r.statusText);
+        const j = (await r.json()) as InvoicePayload;
+        if (!r.ok) throw new Error((j as { error?: string }).error ?? r.statusText);
         setData(j);
         setEditedJson(JSON.stringify(j.ocrSummary ?? {}, null, 2));
       } catch (e) {
@@ -47,7 +52,7 @@ export default function App() {
     setError(null);
     try {
       const editedFields =
-        action === "APPROVE" ? JSON.parse(editedJson || "{}") as Record<string, unknown> : undefined;
+        action === "APPROVE" ? (JSON.parse(editedJson || "{}") as Record<string, unknown>) : undefined;
       const r = await fetch(`${apiBase}/public/decision`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -85,12 +90,23 @@ export default function App() {
           <p>
             <strong>Lowest field confidence</strong> {data.minConfidence?.toFixed?.(1) ?? "—"}
           </p>
+          {needManualVerify ? (
+            <p style={{ background: "#fff8e6", padding: 12, borderRadius: 8 }}>
+              <strong>Manual verification required</strong> — correct the OCR payload below before approving.
+            </p>
+          ) : (
+            <p style={{ background: "#e8f5e9", padding: 12, borderRadius: 8 }}>
+              <strong>Verification automatic</strong> — OCR met the confidence threshold. Review the summary and
+              confirm with Approve or Reject (approval is never automatic).
+            </p>
+          )}
           <label style={{ display: "block", marginTop: 16 }}>
-            <strong>OCR payload (edit before approve)</strong>
+            <strong>{needManualVerify ? "OCR payload (edit before approve)" : "Extracted data (read-only)"}</strong>
             <textarea
               style={{ width: "100%", minHeight: 220, marginTop: 8, fontFamily: "monospace" }}
               value={editedJson}
-              onChange={(e) => setEditedJson(e.target.value)}
+              onChange={needManualVerify ? (e) => setEditedJson(e.target.value) : undefined}
+              readOnly={!needManualVerify}
             />
           </label>
           <label style={{ display: "block", marginTop: 16 }}>

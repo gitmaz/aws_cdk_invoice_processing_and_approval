@@ -1,0 +1,18 @@
+1- create a cdk project with dev, test and prod stages, use config to put resource stage specific  values there or develop best practice to
+load them from ssm
+
+develop a typescript event driven approval aws stack using step functions , s3, dynamodb, lambdas, sqs, ses, cognito, authoriser , jwt, make it reliable by timeout and retries and exception handling and dlq , validations
+
+user will upload an invoice to s3, this will trigger validation lambda where the invoice image is ocr-ed.
+
+OCR confidence drives UX only, not whether a human approves:
+- If OCR confidence is HIGH (at/above configured threshold): extraction is trusted — verification is automatic (no manual re-entry). User still lands on an approval page and must explicitly approve or reject (never auto-approve from OCR alone).
+- If OCR confidence is LOW (below threshold): user lands on a manual verification page — correct/re-enter extracted values, then approve or reject.
+
+Notify reviewer via email with link to the SPA (React). DynamoDB holds workflow state.
+
+On rejection, relevant users get email with why the invoice was rejected.
+
+upon approval or rejection, an analytics lambda will keep track of approved and rejected counts and further analytics which are kept in another stack and be triggered via eventbridge.
+
+use best practices.

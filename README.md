@@ -1,6 +1,6 @@
 # Invoice processing & approval (AWS CDK)
 
-TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3**, **SQS**-buffered ingest, **Textract** (`AnalyzeExpense`) inside **Step Functions**, optional **auto-approval** or **human review** via **SES** + **HTTP API** + a small **React** SPA, state in **DynamoDB**, and **EventBridge**-driven **analytics** in a separate stack.
+TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3**, **SQS**-buffered ingest, **Textract** (`AnalyzeExpense`) inside **Step Functions**, then **mandatory human approve/reject** via **SES** + **HTTP API** + **React** SPA. OCR confidence only selects **manual verification** (low) vs **approval-only** UI (high)—never automatic approval from OCR alone. State in **DynamoDB**, **EventBridge** analytics in a separate stack.
 
 | Resource | Stack / name pattern |
 | -------- | -------------------- |
@@ -10,7 +10,7 @@ TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3*
 
 **Stages** are selected with CDK context: `-c stage=dev` (default), `test`, or `prod`. Deeper configuration, architecture, and links into the code are in **[README-dev.md](./README-dev.md)**.
 
-**Product notes** live in `prompts.txt` (intentionally **not** committed; see [.gitignore](./.gitignore)).
+Product intent and scope notes: **`prompts.txt`** (versioned in this repo).
 
 ---
 
