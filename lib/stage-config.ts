@@ -78,7 +78,9 @@ export function loadStageConfig(
   const spaBaseUrl =
     ctxStage.spaBaseUrl ??
     local.spaBaseUrl ??
-    (stage === "dev" ? "http://localhost:5173" : `https://invoice-spa-${stage}.example.com`);
+    (stage === "dev" || stage === "local"
+      ? "http://localhost:5173"
+      : `https://invoice-spa-${stage}.example.com`);
 
   return {
     stage,

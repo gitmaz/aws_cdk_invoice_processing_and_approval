@@ -8,22 +8,32 @@ import { loadStageConfig, type InvoiceContextOverrides } from "../lib/stage-conf
 const app = new cdk.App();
 
 const stage = app.node.tryGetContext("stage") ?? "dev";
-const account = process.env.CDK_DEFAULT_ACCOUNT;
-const region = process.env.CDK_DEFAULT_REGION ?? "us-east-1";
+const isLocal = stage === "local";
+
+/** LocalStack convention; avoids needing real AWS account resolution during synth/deploy-to-emulator. */
+const localEnv = {
+  account: "000000000000",
+  region: process.env.CDK_DEFAULT_REGION ?? "us-east-1",
+};
+
+const account = isLocal ? localEnv.account : process.env.CDK_DEFAULT_ACCOUNT;
+const region = isLocal ? localEnv.region : process.env.CDK_DEFAULT_REGION ?? "us-east-1";
+
+const stackEnv = isLocal ? localEnv : { account, region };
 
 const config = loadStageConfig(stage, {
   invoice: app.node.tryGetContext("invoice") as Record<string, InvoiceContextOverrides> | undefined,
 });
 
 const analyticsStack = new AnalyticsStack(app, `InvoiceAnalytics-${stage}`, {
-  env: { account, region },
+  env: stackEnv,
   stage,
   config,
   description: `Invoice analytics (EventBridge + DynamoDB) — ${stage}`,
 });
 
 const invoiceStack = new InvoiceProcessingStack(app, `InvoiceProcessing-${stage}`, {
-  env: { account, region },
+  env: stackEnv,
   stage,
   config,
   analyticsEventBus: analyticsStack.eventBus,

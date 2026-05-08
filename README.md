@@ -8,7 +8,7 @@ TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3*
 | Invoices, workflow, API | `InvoiceProcessing-<stage>` → e.g. `invoice-records-<stage>`, `invoice-processing-<stage>` (state machine) |
 | Counters / daily rollups | `invoice-analytics-<stage>` (DynamoDB) |
 
-**Stages** are selected with CDK context: `-c stage=dev` (default), `test`, or `prod`. Deeper configuration, architecture, and links into the code are in **[README-dev.md](./README-dev.md)**.
+**Stages** are selected with CDK context: `-c stage=dev` (default), `test`, `prod`, or **`local`** (LocalStack — see **[LOCALSTACK.md](./LOCALSTACK.md)**). Deeper configuration, architecture, and links into the code are in **[README-dev.md](./README-dev.md)**.
 
 Product intent and scope notes: **`prompts.txt`** (versioned in this repo).
 

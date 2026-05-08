@@ -32,6 +32,10 @@
       },
       "prod": {
         "ocrConfidenceThreshold": 92
+      },
+      "local": {
+        "spaBaseUrl": "http://localhost:5173",
+        "ocrConfidenceThreshold": 82
       }
     }
   }

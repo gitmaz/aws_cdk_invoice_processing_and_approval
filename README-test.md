@@ -74,7 +74,8 @@ All tests live under [`tests/lambdas/`](./tests/lambdas/) and use **module mocks
 
 | File | Handler / module | What is asserted |
 | ---- | ---------------- | ---------------- |
-| [`validate.handler.test.ts`](./tests/lambdas/validate.handler.test.ts) | [`lambda/validate`](./lambda/validate/index.ts) | Textract confidence → `manualVerificationRequired`; DynamoDB `Put` shape; empty S3 → error |
+| [`validate.handler.test.ts`](./tests/lambdas/validate.handler.test.ts) | [`lambda/validate`](./lambda/validate/index.ts) | Textract confidence → `manualVerificationRequired`; **`MOCK_TEXTRACT`** LocalStack path; DynamoDB `Put` shape; empty S3 → error |
+| [`validate.test.ts`](./lambda/validate/validate.test.ts) | [`lambda/validate/textract-helpers`](./lambda/validate/textract-helpers.ts) | Synthetic `AnalyzeExpense` shape + `MOCK_TEXTRACT_MIN_CONFIDENCE` |
 | [`public-api.handler.test.ts`](./tests/lambdas/public-api.handler.test.ts) | [`lambda/public-api`](./lambda/public-api/index.ts) | GET session + status guardrails; POST builds `SendTaskSuccess` output |
 | [`finalize-human-approve.test.ts`](./tests/lambdas/finalize-human-approve.test.ts) | [`lambda/finalize-human-approve`](./lambda/finalize-human-approve/index.ts) | `emitInvoiceOutcome` called with `APPROVED` |
 | [`finalize-human-reject.test.ts`](./tests/lambdas/finalize-human-reject.test.ts) | [`lambda/finalize-human-reject`](./lambda/finalize-human-reject/index.ts) | Outcome + optional SES when emails configured |
@@ -102,7 +103,7 @@ Catches regressions in **business rules** (threshold, session checks, outcome pa
 ## What is *not* covered here
 
 - **CDK synthesis** of stacks (`npm run synth`) — still useful; requires correct Node/aws-cdk install but not necessarily account calls unless you use lookups.
-- **End-to-end** upload → SQS → Step Functions → SES — requires AWS (or a heavy emulator such as LocalStack, not wired in this repo).
+- **End-to-end** upload → SQS → Step Functions → SES on **real AWS** — not automated here. For a **local emulator**, see **[LOCALSTACK.md](./LOCALSTACK.md)** (`stage=local`, mock Textract).
 
 ---
 

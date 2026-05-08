@@ -82,7 +82,11 @@ export class InvoiceProcessingStack extends cdk.Stack {
       ...lambdaDefaults,
       entry: path.join(__dirname, "..", "lambda", "validate", "index.ts"),
       handler: "handler",
-      environment: { ...commonLambdaEnv },
+      environment: {
+        ...commonLambdaEnv,
+        /** LocalStack Community has no real Textract AnalyzeExpense; synthetic OCR when deployed with stage=local */
+        ...(stage === "local" ? { MOCK_TEXTRACT: "1" } : {}),
+      },
     });
 
     const notifyFn = new NodejsFunction(this, "NotifyHumanFn", {
@@ -160,7 +164,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
         "stage.$": "$.validated.stage",
         "minConfidence.$": "$.validated.minConfidence",
         "manualVerificationRequired.$": "$.validated.manualVerificationRequired",
-        "taskToken.$": "$$.Task.Token",
+        taskToken: sfn.JsonPath.taskToken,
       }),
       taskTimeout: sfn.Timeout.duration(cdk.Duration.days(7)),
     }).addCatch(new sfn.Fail(this, "HumanReviewTimeout", { error: "HumanReviewTimeout" }), {
@@ -199,7 +203,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
       stateMachineName: `invoice-processing-${stage}`,
       definitionBody: sfn.DefinitionBody.fromChainable(definition),
       timeout: cdk.Duration.days(14),
-      tracingEnabled: true,
+      tracingEnabled: stage !== "local",
       logs: {
         destination: new logs.LogGroup(this, "InvoiceSfnLogs", {
           retention: logs.RetentionDays.TWO_WEEKS,

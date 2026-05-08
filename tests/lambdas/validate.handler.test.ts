@@ -42,6 +42,8 @@ describe("validate handler", () => {
     s3Send.mockReset();
     textractSend.mockReset();
     ddbSend.mockReset();
+    delete process.env.MOCK_TEXTRACT;
+    delete process.env.MOCK_TEXTRACT_MIN_CONFIDENCE;
     process.env.INVOICES_TABLE_NAME = "invoice-records-test";
     process.env.OCR_CONFIDENCE_THRESHOLD = "85";
 
@@ -110,5 +112,32 @@ describe("validate handler", () => {
     await expect(
       handler({ bucket: "b", key: "k", invoiceId: "inv-empty", stage: "dev" }),
     ).rejects.toThrow(/Empty S3 object/);
+  });
+
+  it("skips Textract and uses mock OCR when MOCK_TEXTRACT=1 (LocalStack path)", async () => {
+    vi.resetModules();
+    process.env.MOCK_TEXTRACT = "1";
+    process.env.MOCK_TEXTRACT_MIN_CONFIDENCE = "88";
+    process.env.INVOICES_TABLE_NAME = "invoice-records-test";
+    process.env.OCR_CONFIDENCE_THRESHOLD = "85";
+    s3Send.mockResolvedValue({
+      Body: {
+        transformToByteArray: async () => new Uint8Array([1, 2, 3]),
+      },
+    });
+    ddbSend.mockResolvedValue({});
+
+    const { handler: h } = await import("../../lambda/validate/index");
+
+    const out = await h({
+      bucket: "b",
+      key: "k.png",
+      invoiceId: "inv-mock",
+      stage: "local",
+    });
+
+    expect(textractSend).not.toHaveBeenCalled();
+    expect(out.minConfidence).toBe(88);
+    expect(out.manualVerificationRequired).toBe(false);
   });
 });
