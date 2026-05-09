@@ -62,4 +62,4 @@ Default string (unless overridden): **`localstack-presign-change-me`**.
 | [`lib/stage-config.ts`](./lib/stage-config.ts) | **`presignLocalSecret`** on **`StageConfig`** |
 | [`e2e/env.example`](./e2e/env.example) | **`PLAYWRIGHT_PRESIGN_LOCAL_SECRET`** for Playwright |
 
-See also **[LOCALSTACK.md](./LOCALSTACK.md)** (overview) and **[user-guide.md](./user-guide.md)** (SPA / uploads).
+See also **[LOCALSTACK.md](./LOCALSTACK.md)** (overview) and **[local-e2e-userguide.md](./local-e2e-userguide.md)** (local Vite SPA / uploads / E2E).

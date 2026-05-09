@@ -2,6 +2,9 @@ node_modules/
 cdk.out/
 dist/
 
+# LocalStack Docker persistence (docker-compose.yml default LOCALSTACK_VOLUME_DIR)
+.localstack-data/
+
 spa/node_modules/
 spa/dist/
 

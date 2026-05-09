@@ -12,7 +12,7 @@ TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3*
 
 Product intent and scope notes: **`prompts.txt`** (versioned in this repo).
 
-**SPA + LocalStack (review UI, MailHog, presign, Playwright E2E):** **[user-guide.md](./user-guide.md)**.
+**Local Vite + LocalStack (review UI, MailHog, presign, Playwright E2E):** **[local-e2e-userguide.md](./local-e2e-userguide.md)**.
 
 ---
 

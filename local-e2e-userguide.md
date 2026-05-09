@@ -1,8 +1,8 @@
-# User guide — SPA with LocalStack backend
+# Local E2E user guide — Vite SPA + LocalStack
 
-This project includes a **React + Vite** approval UI under [`spa/`](./spa). This guide explains how to run it against a **`stage=local`** stack on **LocalStack**, how to exercise **upload → workflow → review**, and how to handle **email** (SES) in a local environment.
+This guide covers running the **React + Vite** approval UI under [`spa/`](./spa) against a **`stage=local`** stack on **LocalStack**: **upload → workflow → review**, **email (SES)**, and **Playwright E2E**. It is intentionally separate from general AWS deploy docs.
 
-For backend-only setup (CDK deploy, Textract mock), see **[LOCALSTACK.md](./LOCALSTACK.md)**.
+For backend-only setup (CDK deploy, Textract mock, MailHog compose), see **[LOCALSTACK.md](./LOCALSTACK.md)**.
 
 ---
 

@@ -1,0 +1,35 @@
+# MailHog + optional LocalStack for local SES testing (Community-friendly).
+#
+# MailHog only (LocalStack already running on the host via the CLI):
+#   docker compose up -d mailhog
+#
+# MailHog + LocalStack in Docker (same network; SES → SMTP → MailHog):
+#   docker compose --profile localstack up -d
+#
+# Web UI: http://localhost:8025  |  SMTP: localhost:1025 (from the host)
+
+services:
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+  localstack:
+    profiles:
+      - localstack
+    image: localstack/localstack:4.12
+    ports:
+      - "4566:4566"
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      DEBUG: ${DEBUG:-0}
+      # Route SES outbound mail to MailHog (same compose network).
+      SMTP_HOST: mailhog:1025
+      # Lambda execution inside LocalStack needs the Docker daemon.
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./.localstack-data}:/var/lib/localstack"
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - mailhog

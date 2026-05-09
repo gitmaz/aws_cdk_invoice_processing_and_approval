@@ -4,6 +4,18 @@ Reason-focused notes and small excerpts so we can recall **why** something chang
 
 ---
 
+## 2026-05-10
+
+### Rename local SPA guide (`user-guide.md` → `local-e2e-userguide.md`)
+
+**Reason:** The former name was generic; the doc is specifically for **local Vite + LocalStack** flows (review UI, MailHog, Playwright E2E).
+
+**What changed**
+
+- **`user-guide.md`** removed; replaced by **`local-e2e-userguide.md`**. Links updated in **`README.md`**, **`LOCALSTACK.md`**, **`LOCALSTACK-PRESIGN-AUTH.md`**.
+
+---
+
 ## 2026-05-09
 
 ### LocalStack Windows: make E2E pass reliably (REST API quirks, presign endpoint host, S3 notifications)
