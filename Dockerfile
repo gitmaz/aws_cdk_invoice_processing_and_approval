@@ -1,5 +1,6 @@
-# Node toolchain for this CDK app. Keep in sync with the recommended host Node.
-FROM node:22-bookworm-slim
+# Optional Node toolchain for this CDK app.
+# We run CDK from the host now; keep this image at Node 20 to match `engines` and avoid Node 22 drift.
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
@@ -9,9 +10,6 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
-
-# CDK CLI + LocalStack wrapper (used by `deploy:local` / `destroy:local` on Windows without relying on bind-mounted `node_modules` / lockfile).
-RUN npm install -g aws-cdk@2.1121.0 aws-cdk-local@3.0.4
 
 # Mount the repo at /app when running. Interactive shell by default.
 CMD ["bash", "-lc", "node -v && npm -v && exec bash"]
