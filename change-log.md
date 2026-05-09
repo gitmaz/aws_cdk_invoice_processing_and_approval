@@ -24,9 +24,9 @@ Reason-focused notes and small excerpts so we can recall **why** something chang
 - **`spa/src/App.tsx`** + **`e2e/invoice-approval-local.spec.ts`** — SPA can accept `apiBase` via query param; test appends it so the SPA always hits the same API base the test used.
 - **`playwright.config.ts`** — Don’t reuse an existing Vite server so `VITE_API_BASE_URL` can’t be stale between runs.
 
-### Local presign secret (LocalStack Community), Docker Playwright, Cognito notes
+### Local presign secret (LocalStack Community), Playwright, Cognito notes
 
-**Reason:** **HTTP API JWT authorizers** usually cannot validate tokens minted by **LocalStack Cognito** (issuer/JWKS mismatch). Community LocalStack users still need a reliable **`POST /upload/presign`** path. Host **Node** is often **older than Node 20** while the repo **`engines`** / Docker **`node20`** image target **20**.
+**Reason:** **HTTP API JWT authorizers** usually cannot validate tokens minted by **LocalStack Cognito** (issuer/JWKS mismatch). Community LocalStack users still need a reliable **`POST /upload/presign`** path.
 
 **What changed**
 
@@ -35,7 +35,7 @@ Reason-focused notes and small excerpts so we can recall **why** something chang
 - **`cdk.json`** / **`config/example.local.json`** — **`invoice.local.presignLocalSecret`** documented.
 - **`lib/invoice-processing-stack.ts`** — For **`stage===local`**: **no** **`HttpJwtAuthorizer`** on **`/upload/presign`**; CORS allows **`x-presign-local-secret`**; Lambda env **`PRESIGN_LOCAL_SECRET`**.
 - **`lambda/presign-upload/index.ts`** — **`local`**: require matching **`x-presign-local-secret`** or (if ever wired) JWT claims; non-local: require **`sub`** from JWT authorizer.
-- **`package.json`** — **`test:e2e:docker`**, **`test:e2e:docker:install`**.
+- **`package.json`** — Playwright scripts use `npx playwright ...` (host Node).
 - **`playwright.config.ts`**, **`e2e/*`**, **`user-guide.md`**, **`LOCALSTACK.md`**, **`README-dev.md`** — Document secret-first flow and **`host.docker.internal`** for Docker Playwright.
 
 ---
@@ -62,7 +62,7 @@ Reason-focused notes and small excerpts so we can recall **why** something chang
 **What changed**
 
 - **`user-guide.md`** — Run **`spa/`** with **`VITE_API_BASE_URL`**, stack outputs (HttpApi, Cognito), **`config/local.json`** from **`config/example.local.json`**, end-to-end flow, MailHog + LocalStack SES extension notes, Mailpit alternative, Cognito caveats.
-- **`docker-compose.yml`** — **`mailhog`** service (**UI 8025**, **SMTP 1025**).
+- **MailHog** — optional; run separately if you want the soft-check in Playwright.
 - **`config/example.local.json`** — Template recipients/sender for local SES experiments.
 - **`lambda/notify-human/index.ts`** — When **`STAGE===local`**, **`console.log`** the **review URL** so testers can open the SPA without relying on inbox delivery.
 
@@ -92,9 +92,9 @@ const localEnv = {
 };
 ```
 
-- **`scripts/deploy-local-localstack.mjs`** / **`scripts/destroy-local-localstack.mjs`** — Use **`cdk bootstrap`** then **`cdk deploy --all -c stage=local`** (or **`cdk destroy --all --force`**) with LocalStack-oriented env (`AWS_ENDPOINT_URL`, dummy `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`). On Windows, CDK runs inside **`docker compose run node20`** with default endpoint **`http://host.docker.internal:4566`** so the container reaches LocalStack on the host; **`npm rebuild esbuild`** runs first so Linux bundling matches bind-mounted Windows `node_modules`.
+- **`scripts/deploy-local-localstack.mjs`** / **`scripts/destroy-local-localstack.mjs`** — Host-based CDK deploy/destroy against LocalStack with LocalStack-oriented env (`AWS_ENDPOINT_URL`, dummy `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
-- **`package.json`** — Scripts `synth:local`, `deploy:local`, `destroy:local`; **`docker:synth`** chains **`npm rebuild esbuild`** before synth for the same Windows/Docker reason.
+- **`package.json`** — Scripts `synth:local`, `deploy:local`, `destroy:local`.
 
 - **`cdk.json`** — Optional `context.invoice.local` defaults (SPA URL, OCR threshold).
 

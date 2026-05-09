@@ -20,7 +20,7 @@ For backend-only setup (CDK deploy, Textract mock), see **[LOCALSTACK.md](./LOCA
 
 1. **LocalStack** running (default `http://localhost:4566` from the host).
 2. **This CDK app** deployed with **`stage=local`** (`npm run deploy:local` from the repo root — see [LOCALSTACK.md](./LOCALSTACK.md)).
-3. **Node 20+** for the SPA (or use the existing **`node20`** Docker service if your OS Node is older).
+3. **Node 20+** for the SPA (recommended: Node 22).
 
 Collect **stack outputs** after deploy (CDK prints them; or query CloudFormation on LocalStack):
 
@@ -108,20 +108,14 @@ LocalStack documents a **MailHog extension** that routes SES-related traffic so 
 
 Typical shape:
 
-1. Start **MailHog** (this repo includes a **Compose** service — [Docker Compose](#docker-compose-mailhog)).
+1. Start **MailHog** (optional; run it separately if desired).
 2. Enable the LocalStack **MailHog extension** (or equivalent configuration for your LocalStack edition).
 3. **Verify** sender/recipient identities in **LocalStack SES** if required (`ses verify-email-identity` against the LocalStack endpoint).
 4. Trigger the workflow; open **MailHog UI** at **`http://localhost:8025`** and click the message containing the review link.
 
 Availability of the extension may depend on your **LocalStack edition**; check your installed version’s documentation.
 
-### Option B — MailHog in Docker (this repo)
-
-A **MailHog** service is defined in [`docker-compose.yml`](./docker-compose.yml):
-
-```bash
-docker compose up -d mailhog
-```
+### Option B — MailHog (run separately)
 
 | Port | Purpose |
 | ---- | ------- |
@@ -168,7 +162,7 @@ Automated test: **[e2e/invoice-approval-local.spec.ts](./e2e/invoice-approval-lo
 3. If **`PLAYWRIGHT_MAILHOG_URL`** is set, **soft-asserts** MailHog lists a message mentioning **`invoiceId`** (when SES reaches MailHog).
 4. Opens the **Vite** SPA with **`invoiceId` + `session`**, clicks **Approve**, accepts **`alert()`**.
 
-**Host Node older than 20:** **`npm run test:e2e:docker:install`** then **`npm run test:e2e:docker`** (inside **`node20`** image). From Docker, use **`http://host.docker.internal:4566`** for **`AWS_ENDPOINT_URL`** / **`PLAYWRIGHT_API_BASE_URL`** — see **[e2e/env.example](./e2e/env.example)**.
+**Host Node older than 20:** upgrade Node (recommended: Node 22).
 
 **One-time browser install (host Node 20+):**
 

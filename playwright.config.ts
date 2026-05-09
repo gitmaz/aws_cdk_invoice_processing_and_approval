@@ -1,9 +1,6 @@
 /**
  * Playwright expects **Node 20+** (matches repo `engines`). If your host Node is older,
- * run **`npm run test:e2e:docker`** so tests execute inside the **`node20`** Compose service.
- *
- * When Playwright runs **inside Docker**, point **`PLAYWRIGHT_API_BASE_URL`** and **`AWS_ENDPOINT_URL`**
- * at **`http://host.docker.internal:4566`** (LocalStack on the host), not `localhost:4566`.
+ * upgrade Node or use a host Node >= 20.
  */
 import { defineConfig, devices } from "@playwright/test";
 

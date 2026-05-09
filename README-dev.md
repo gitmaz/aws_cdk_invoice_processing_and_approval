@@ -271,66 +271,14 @@ await eb.send(
 
 ---
 
-## Node 20 via Docker (Windows and others)
+## Node / toolchain
 
-The app targets **Node 20** (see [package.json](./package.json) `engines`). If your Windows install is still on **Node 18**, use the included image so `npm` / `cdk` / `esbuild` run on **Node 20** without changing the host.
-
-The **installation guide** and a **local (dev) oriented** Docker walkthrough also live in [README.md](./README.md) ([Installation guide](./README.md#installation-guide), [Local development with Docker (dev)](./README.md#local-development-with-docker-dev)).
-
-**Files:** [Dockerfile](./Dockerfile), [docker-compose.yml](./docker-compose.yml), [.dockerignore](./.dockerignore).
-
-**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine) with Compose v2.
-
-### Local (dev) setup checklist
-
-1. **Clone / cd** into [`aws_cdk_invoice_processing_and_approval`](.) (this folder).
-2. **`docker compose build`** — builds `invoice-processing-node20:local` from [Dockerfile](./Dockerfile).
-3. **`docker compose run --rm node20 npm install`** — writes `node_modules` to the **host** mount (same folder); run this after pulling dependency changes.
-4. **`docker compose run --rm node20 npm run synth`** — confirms CDK + TypeScript without deploying.
-5. **Deploy (optional):** set `CDK_DEFAULT_ACCOUNT` / `CDK_DEFAULT_REGION` on the host or use `-e` / mounted `~/.aws` (see PowerShell example below).
-6. **SPA:** for UI-only work, [`spa/`](./spa) often runs with host `npm run dev`; point `VITE_API_BASE_URL` at the deployed `HttpApiUrl`. See [HTTP API and SPA](#http-api-and-spa).
-
-### Commands reference
-
-**Build the image** (from this directory):
-
-```bash
-docker compose build
-```
-
-**One-off commands** (repo mounted at `/app`; `node_modules` is on your disk, so installs persist):
-
-```bash
-docker compose run --rm node20 npm install
-docker compose run --rm node20 npm run synth
-```
-
-**Interactive shell** (Node 20 + same repo):
-
-```bash
-docker compose run --rm node20 bash
-# then: node -v   # v20.x
-#      npm run deploy:dev
-```
-
-**PowerShell** (same as above; ensure you `cd` to the project folder first). For **AWS deploy from the container**, mount your AWS config or pass env vars. The compose file forwards `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`, and `AWS_REGION` if set in the host environment. Mount credentials on Windows, for example:
-
-```powershell
-docker compose run --rm `
-  -v "${env:USERPROFILE}\.aws:/root/.aws:ro" `
-  node20 npm run synth
-```
-
-Adjust the left side of the volume if your profile directory differs.
-
-**Why Docker here:** aligns local toolchain with Lambda **nodejs20.x** and avoids engine mismatch warnings from npm without upgrading the global Windows Node install.
-
-Shortcut scripts (optional): see `docker:*` entries in [package.json](./package.json).
+This repo is **host-first**: use **Node 20+** (recommended: **Node 22**) and run CDK/Playwright directly from the host.
 
 ---
 
 ## Related reading
 
 - [README.md](./README.md) — short overview and quick start  
-- [package.json](./package.json) — scripts (`deploy:dev`, `synth`, `spa:build`, `docker:*`)  
+- [package.json](./package.json) — scripts (`deploy:dev`, `synth`, `spa:build`)
 - [cdk.json](./cdk.json) — `context.invoice` defaults per stage  

@@ -20,7 +20,7 @@ const region = process.env.CDK_DEFAULT_REGION ?? process.env.AWS_DEFAULT_REGION 
 /** Default host endpoint (LocalStack on host). */
 const defaultHostEndpoint = "http://127.0.0.1:4566";
 
-/** When unset, pick an endpoint that reaches LocalStack from the host vs from inside `docker compose run`. */
+/** When unset, pick an endpoint that reaches LocalStack from the host. */
 function resolvedEndpoint() {
   return process.env.AWS_ENDPOINT_URL ?? defaultHostEndpoint;
 }
@@ -46,7 +46,7 @@ function hostLocalstackEnv(endpoint) {
 }
 
 /**
- * `docker compose run` merges the host environment; a host `AWS_PROFILE` can make CDK ignore dummy keys.
+ * A host `AWS_PROFILE` can make CDK ignore dummy keys.
  * `HOME` from Docker Desktop can point at an unusable Windows path — normalize before CDK runs.
  */
 const ep = resolvedEndpoint();
