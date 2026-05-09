@@ -53,6 +53,12 @@ export const handler = async (event: Ev) => {
 
   const approveUrl = `${spaBase}/?invoiceId=${encodeURIComponent(event.invoiceId)}&session=${encodeURIComponent(reviewSessionId)}`;
 
+  if (process.env.STAGE === "local") {
+    console.log(
+      `[invoice-notify local] Review URL (open in browser; also sent via SES when configured): ${approveUrl}`,
+    );
+  }
+
   const modeHint = event.manualVerificationRequired
     ? "Manual verification is required: please check and correct the extracted values on the form, then approve or reject."
     : "OCR confidence is high: values are pre-verified; please review and explicitly approve or reject (no auto-approval).";

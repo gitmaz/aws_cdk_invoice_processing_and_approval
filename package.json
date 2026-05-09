@@ -18,6 +18,8 @@
     "synth:local": "cdk synth -c stage=local",
     "deploy:local": "node scripts/deploy-local-localstack.mjs",
     "destroy:local": "node scripts/destroy-local-localstack.mjs",
+    "localstack:up": "docker compose up -d localstack",
+    "localstack:down": "docker compose stop localstack",
     "spa:build": "npm run build --prefix spa",
     "docker:build": "docker compose build",
     "docker:sh": "docker compose run --rm node20 bash",
@@ -25,12 +27,21 @@
     "docker:synth": "docker compose run --rm node20 sh -lc \"npm rebuild esbuild && npm run synth\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "demo:api": "node local/mock-public-api.cjs"
+    "demo:api": "node local/mock-public-api.cjs",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:install": "npx playwright install chromium",
+    "playwright:print-env": "node scripts/print-playwright-env.mjs",
+    "test:e2e:docker": "docker compose run --rm node20 sh -lc \"npm rebuild esbuild && npx playwright test\"",
+    "test:e2e:docker:install": "docker compose run --rm node20 sh -lc \"npm rebuild esbuild && npx playwright install chromium\""
   },
   "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.683.0",
+    "@playwright/test": "^1.59.1",
     "@types/aws-lambda": "^8.10.145",
     "@types/node": "^20.14.0",
-    "aws-cdk": "^2.170.0",
+    "aws-cdk": "^2.1121.0",
+    "aws-cdk-local": "^3.0.4",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.4"

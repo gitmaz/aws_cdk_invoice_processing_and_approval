@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as apigw from "aws-cdk-lib/aws-apigateway";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigwIntegrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as authorizers from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -17,7 +18,7 @@ import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
 import * as path from "path";
-import type { StageConfig } from "./stage-config";
+import { projectRoot, type StageConfig } from "./stage-config";
 
 export interface InvoiceProcessingStackProps extends cdk.StackProps {
   stage: string;
@@ -80,7 +81,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const validateFn = new NodejsFunction(this, "ValidateInvoiceFn", {
       ...lambdaDefaults,
-      entry: path.join(__dirname, "..", "lambda", "validate", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "validate", "index.ts"),
       handler: "handler",
       environment: {
         ...commonLambdaEnv,
@@ -91,7 +92,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const notifyFn = new NodejsFunction(this, "NotifyHumanFn", {
       ...lambdaDefaults,
-      entry: path.join(__dirname, "..", "lambda", "notify-human", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "notify-human", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(30),
       environment: { ...commonLambdaEnv },
@@ -99,7 +100,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const finalizeApproveFn = new NodejsFunction(this, "FinalizeHumanApproveFn", {
       ...lambdaDefaults,
-      entry: path.join(__dirname, "..", "lambda", "finalize-human-approve", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "finalize-human-approve", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(30),
       environment: { ...commonLambdaEnv },
@@ -107,7 +108,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const finalizeRejectFn = new NodejsFunction(this, "FinalizeHumanRejectFn", {
       ...lambdaDefaults,
-      entry: path.join(__dirname, "..", "lambda", "finalize-human-reject", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "finalize-human-reject", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(30),
       environment: { ...commonLambdaEnv },
@@ -144,7 +145,6 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const validateTask = new tasks.LambdaInvoke(this, "ValidateInvoiceTask", {
       lambdaFunction: validateFn,
-      payload: sfn.TaskInput.fromJsonPathAt("$"),
       resultPath: "$.validated",
       retryOnServiceExceptions: true,
     }).addRetry({
@@ -158,12 +158,12 @@ export class InvoiceProcessingStack extends cdk.Stack {
       lambdaFunction: notifyFn,
       integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
       payload: sfn.TaskInput.fromObject({
-        "bucket.$": "$.validated.bucket",
-        "key.$": "$.validated.key",
-        "invoiceId.$": "$.validated.invoiceId",
-        "stage.$": "$.validated.stage",
-        "minConfidence.$": "$.validated.minConfidence",
-        "manualVerificationRequired.$": "$.validated.manualVerificationRequired",
+        "bucket.$": "$.validated.Payload.bucket",
+        "key.$": "$.validated.Payload.key",
+        "invoiceId.$": "$.validated.Payload.invoiceId",
+        "stage.$": "$.validated.Payload.stage",
+        "minConfidence.$": "$.validated.Payload.minConfidence",
+        "manualVerificationRequired.$": "$.validated.Payload.manualVerificationRequired",
         taskToken: sfn.JsonPath.taskToken,
       }),
       taskTimeout: sfn.Timeout.duration(cdk.Duration.days(7)),
@@ -214,7 +214,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const ingestFn = new NodejsFunction(this, "IngestFromQueueFn", {
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, "..", "lambda", "ingest", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "ingest", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(30),
       environment: {
@@ -235,7 +235,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const publicApiFn = new NodejsFunction(this, "PublicInvoiceApiFn", {
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, "..", "lambda", "public-api", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "public-api", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(15),
       environment: { INVOICES_TABLE_NAME: invoicesTable.tableName },
@@ -269,50 +269,105 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const presignFn = new NodejsFunction(this, "PresignUploadFn", {
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, "..", "lambda", "presign-upload", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "presign-upload", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(10),
       environment: {
         INVOICES_BUCKET_NAME: invoicesBucket.bucketName,
         STAGE: stage,
+        ...(stage === "local" && config.presignLocalSecret
+          ? { PRESIGN_LOCAL_SECRET: config.presignLocalSecret }
+          : {}),
       },
       logRetention: logs.RetentionDays.TWO_WEEKS,
     });
     invoicesBucket.grantReadWrite(presignFn);
 
-    const httpApi = new apigwv2.HttpApi(this, "InvoiceHttpApi", {
-      apiName: `invoice-api-${stage}`,
-      corsPreflight: {
-        allowHeaders: ["authorization", "content-type"],
-        allowMethods: [
-          apigwv2.CorsHttpMethod.GET,
-          apigwv2.CorsHttpMethod.POST,
-          apigwv2.CorsHttpMethod.OPTIONS,
-        ],
-        allowOrigins: ["*"],
+    const uploadCompleteFn = new NodejsFunction(this, "UploadCompleteFn", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(projectRoot(), "lambda", "upload-complete", "index.ts"),
+      handler: "handler",
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        STATE_MACHINE_ARN: stateMachine.stateMachineArn,
+        STAGE: stage,
+        ...(stage === "local" && config.presignLocalSecret
+          ? { PRESIGN_LOCAL_SECRET: config.presignLocalSecret }
+          : {}),
       },
+      logRetention: logs.RetentionDays.TWO_WEEKS,
     });
+    stateMachine.grantStartExecution(uploadCompleteFn);
 
-    httpApi.addRoutes({
-      path: "/public/invoice/{invoiceId}",
-      methods: [apigwv2.HttpMethod.GET],
-      integration: new apigwIntegrations.HttpLambdaIntegration("GetInvoice", publicApiFn),
-    });
+    let apiUrlOutput: string;
 
-    httpApi.addRoutes({
-      path: "/public/decision",
-      methods: [apigwv2.HttpMethod.POST],
-      integration: new apigwIntegrations.HttpLambdaIntegration("PostDecision", publicApiFn),
-    });
+    if (stage === "local") {
+      // LocalStack Community: apigatewayv2 (HTTP API) is not available. Use REST API (v1) for local only.
+      const restApi = new apigw.RestApi(this, "InvoiceRestApi", {
+        restApiName: `invoice-api-${stage}`,
+        deployOptions: { stageName: stage },
+        defaultCorsPreflightOptions: {
+          allowOrigins: apigw.Cors.ALL_ORIGINS,
+          allowMethods: ["GET", "POST", "OPTIONS"],
+          allowHeaders: ["authorization", "content-type", "x-presign-local-secret"],
+        },
+      });
 
-    httpApi.addRoutes({
-      path: "/upload/presign",
-      methods: [apigwv2.HttpMethod.POST],
-      integration: new apigwIntegrations.HttpLambdaIntegration("PresignUpload", presignFn),
-      authorizer: jwtAuthorizer,
-    });
+      const publicRes = restApi.root.addResource("public");
+      const invoiceRes = publicRes.addResource("invoice").addResource("{invoiceId}");
+      invoiceRes.addMethod("GET", new apigw.LambdaIntegration(publicApiFn));
 
-    new cdk.CfnOutput(this, "HttpApiUrl", { value: httpApi.apiEndpoint });
+      const decisionRes = publicRes.addResource("decision");
+      decisionRes.addMethod("POST", new apigw.LambdaIntegration(publicApiFn));
+
+      const uploadRoot = restApi.root.addResource("upload");
+      const uploadRes = uploadRoot.addResource("presign");
+      uploadRes.addMethod("POST", new apigw.LambdaIntegration(presignFn));
+
+      const uploadCompleteRes = uploadRoot.addResource("complete");
+      uploadCompleteRes.addMethod("POST", new apigw.LambdaIntegration(uploadCompleteFn));
+
+      // Prefer the API Gateway "execute-api" base URL which LocalStack serves reliably.
+      // (The legacy /restapis/{id}/... edge path is not consistently supported across LS versions.)
+      apiUrlOutput = restApi.url;
+    } else {
+      const httpApi = new apigwv2.HttpApi(this, "InvoiceHttpApi", {
+        apiName: `invoice-api-${stage}`,
+        corsPreflight: {
+          allowHeaders: ["authorization", "content-type"],
+          allowMethods: [
+            apigwv2.CorsHttpMethod.GET,
+            apigwv2.CorsHttpMethod.POST,
+            apigwv2.CorsHttpMethod.OPTIONS,
+          ],
+          allowOrigins: ["*"],
+        },
+      });
+
+      httpApi.addRoutes({
+        path: "/public/invoice/{invoiceId}",
+        methods: [apigwv2.HttpMethod.GET],
+        integration: new apigwIntegrations.HttpLambdaIntegration("GetInvoice", publicApiFn),
+      });
+
+      httpApi.addRoutes({
+        path: "/public/decision",
+        methods: [apigwv2.HttpMethod.POST],
+        integration: new apigwIntegrations.HttpLambdaIntegration("PostDecision", publicApiFn),
+      });
+
+      /** JWT authorizer is only for non-local. Local uses presign secret header. */
+      httpApi.addRoutes({
+        path: "/upload/presign",
+        methods: [apigwv2.HttpMethod.POST],
+        integration: new apigwIntegrations.HttpLambdaIntegration("PresignUpload", presignFn),
+        authorizer: jwtAuthorizer,
+      });
+
+      apiUrlOutput = httpApi.apiEndpoint;
+    }
+
+    new cdk.CfnOutput(this, "HttpApiUrl", { value: apiUrlOutput });
     new cdk.CfnOutput(this, "InvoicesBucketName", { value: invoicesBucket.bucketName });
     new cdk.CfnOutput(this, "StateMachineArn", { value: stateMachine.stateMachineArn });
     new cdk.CfnOutput(this, "CognitoUserPoolId", { value: userPool.userPoolId });

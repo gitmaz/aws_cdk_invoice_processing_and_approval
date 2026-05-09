@@ -1,32 +1,21 @@
 import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const stage = "local";
 const account = "000000000000";
 const region = process.env.CDK_DEFAULT_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-1";
 
-function resolvedEndpoint(forDockerComposeRun) {
-  if (process.env.AWS_ENDPOINT_URL) return process.env.AWS_ENDPOINT_URL;
-  if (forDockerComposeRun) return "http://host.docker.internal:4566";
-  return "http://localhost:4566";
+const defaultHostEndpoint = "http://127.0.0.1:4566";
+
+function resolvedEndpoint() {
+  return process.env.AWS_ENDPOINT_URL ?? defaultHostEndpoint;
 }
 
-function dockerComposeRunEnv(endpoint) {
-  return [
-    "-e",
-    `AWS_ENDPOINT_URL=${endpoint}`,
-    "-e",
-    "AWS_ACCESS_KEY_ID=test",
-    "-e",
-    "AWS_SECRET_ACCESS_KEY=test",
-    "-e",
-    `AWS_DEFAULT_REGION=${region}`,
-    "-e",
-    `CDK_DEFAULT_ACCOUNT=${account}`,
-    "-e",
-    `CDK_DEFAULT_REGION=${region}`,
-    "-e",
-    "AWS_EC2_METADATA_DISABLED=true",
-  ];
+function resolvedS3Endpoint() {
+  return process.env.AWS_ENDPOINT_URL_S3 ?? resolvedEndpoint();
 }
 
 function hostLocalstackEnv(endpoint) {
@@ -38,25 +27,36 @@ function hostLocalstackEnv(endpoint) {
     CDK_DEFAULT_ACCOUNT: account,
     CDK_DEFAULT_REGION: region,
     AWS_ENDPOINT_URL: endpoint,
+    AWS_ENDPOINT_URL_S3: resolvedS3Endpoint(),
     AWS_EC2_METADATA_DISABLED: "true",
+    AWS_USE_PATH_STYLE_ENDPOINT: "true",
+    AWS_S3_FORCE_PATH_STYLE: "1",
   };
 }
 
-const inner = ["npm rebuild esbuild", `npx cdk destroy --all -c stage=${stage} --force`].join(" && ");
+const ep = resolvedEndpoint();
+const env = hostLocalstackEnv(ep);
+const isWin = process.platform === "win32";
 
-if (process.platform === "win32") {
-  const ep = resolvedEndpoint(true);
-  execFileSync(
-    "docker",
-    ["compose", "run", "--rm", ...dockerComposeRunEnv(ep), "node20", "sh", "-lc", inner],
-    { stdio: "inherit" },
-  );
-} else {
-  const ep = resolvedEndpoint(false);
-  execFileSync("npx", ["cdk", "destroy", "--all", "-c", `stage=${stage}`, "--force"], {
-    stdio: "inherit",
-    env: hostLocalstackEnv(ep),
-  });
+function run(bin, args) {
+  if (!isWin) {
+    execFileSync(bin, args, { stdio: "inherit", env });
+    return;
+  }
+  const cmd = [bin, ...args].join(" ");
+  execFileSync("cmd.exe", ["/d", "/s", "/c", cmd], { stdio: "inherit", env });
 }
+
+run("npm", ["run", "build"]);
+run("npx", [
+  "-p",
+  "aws-cdk@2.1121.0",
+  "cdk",
+  "destroy",
+  "--all",
+  "-c",
+  `stage=${stage}`,
+  "--force",
+]);
 
 console.log("LocalStack destroy initiated/completed (stage=local).");

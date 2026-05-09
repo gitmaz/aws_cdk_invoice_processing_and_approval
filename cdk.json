@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/invoice-app.ts",
+  "app": "node dist/bin/invoice-app.js",
   "watch": {
     "include": ["**"],
     "exclude": [
@@ -35,7 +35,8 @@
       },
       "local": {
         "spaBaseUrl": "http://localhost:5173",
-        "ocrConfidenceThreshold": 82
+        "ocrConfidenceThreshold": 82,
+        "presignLocalSecret": "localstack-presign-change-me"
       }
     }
   }

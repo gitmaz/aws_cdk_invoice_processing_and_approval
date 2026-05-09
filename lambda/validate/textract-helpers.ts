@@ -20,6 +20,7 @@ export function mockAnalyzeExpenseOutput(): AnalyzeExpenseCommandOutput {
     if (!Number.isNaN(n)) confidence = n;
   }
   return {
+    $metadata: { httpStatusCode: 200 },
     ExpenseDocuments: [
       {
         SummaryFields: [{ ValueDetection: { Confidence: confidence } }],

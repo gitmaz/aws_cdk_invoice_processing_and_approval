@@ -1,21 +1,25 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { SFNClient, SendTaskSuccessCommand } from "@aws-sdk/client-sfn";
-import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import type { APIGatewayProxyResultV2 } from "aws-lambda";
 
 const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const sfn = new SFNClient({});
 
 const json = (statusCode: number, body: unknown): APIGatewayProxyResultV2 => ({
   statusCode,
-  headers: { "content-type": "application/json" },
+  headers: {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+  },
   body: JSON.stringify(body),
 });
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+export const handler = async (event: any): Promise<APIGatewayProxyResultV2> => {
   const tableName = process.env.INVOICES_TABLE_NAME!;
-  const method = event.requestContext.http.method;
-  const path = event.rawPath;
+  const e = event as any;
+  const method = e?.requestContext?.http?.method ?? e?.httpMethod ?? "";
+  const path = e?.rawPath ?? e?.path ?? "";
 
   if (method === "GET" && path.includes("/public/invoice/")) {
     const invoiceId = event.pathParameters?.invoiceId;

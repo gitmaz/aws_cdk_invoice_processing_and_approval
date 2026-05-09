@@ -4,3 +4,8 @@ dist/
 
 spa/node_modules/
 spa/dist/
+
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/

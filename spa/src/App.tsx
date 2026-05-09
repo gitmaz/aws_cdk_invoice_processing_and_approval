@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
+const buildTimeApiBase = import.meta.env.VITE_API_BASE_URL ?? "";
 
 function useQuery() {
   return useMemo(() => new URLSearchParams(window.location.search), []);
@@ -17,6 +17,7 @@ export default function App() {
   const q = useQuery();
   const invoiceId = q.get("invoiceId") ?? "";
   const session = q.get("session") ?? "";
+  const apiBase = buildTimeApiBase || q.get("apiBase") || "";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<InvoicePayload | null>(null);

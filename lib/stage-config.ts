@@ -1,6 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
 
+/**
+ * Repo root when this module loads from `lib/` (ts-node) or `dist/lib/` (compiled `node dist/bin/...`).
+ * Lambda `entry` paths and config files must resolve here — `__dirname/../lambda` breaks after `tsc` emits `dist/lib/`.
+ */
+export function projectRoot(): string {
+  const parent = path.resolve(__dirname, "..");
+  return path.basename(parent) === "dist" ? path.resolve(parent, "..") : parent;
+}
+
 /** Resolved settings for a deployment stage (defaults + optional CDK context + optional config file). */
 export interface StageConfig {
   stage: string;
@@ -19,6 +28,11 @@ export interface StageConfig {
   spaBaseUrl: string;
   /** Prefix for SSM parameters this app may read at runtime (documented for operators). */
   ssmParameterPrefix: string;
+  /**
+   * Stage **`local` only**: shared secret for **`POST /upload/presign`** via header **`x-presign-local-secret`**.
+   * HTTP API **JWT authorizers** often fail against LocalStack Community Cognito (issuer / JWKS mismatch), so local uploads use this header instead of Cognito when deployed with `stage=local`.
+   */
+  presignLocalSecret?: string;
 }
 
 export interface InvoiceContextOverrides {
@@ -27,13 +41,12 @@ export interface InvoiceContextOverrides {
   humanReviewNotifyEmails?: string[];
   rejectionNotifyEmails?: string[];
   spaBaseUrl?: string;
+  /** Overrides default local presign secret (see `StageConfig.presignLocalSecret`). */
+  presignLocalSecret?: string;
 }
 
 function readOptionalLocalConfig(stage: string): Partial<StageConfig> {
-  const candidates = [
-    path.join(__dirname, "..", "config", `${stage}.json`),
-    path.join(__dirname, "..", "..", "config", `${stage}.json`),
-  ];
+  const candidates = [path.join(projectRoot(), "config", `${stage}.json`)];
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     try {
@@ -82,6 +95,11 @@ export function loadStageConfig(
       ? "http://localhost:5173"
       : `https://invoice-spa-${stage}.example.com`);
 
+  const presignLocalSecret =
+    ctxStage.presignLocalSecret ??
+    local.presignLocalSecret ??
+    (stage === "local" ? "localstack-presign-change-me" : undefined);
+
   return {
     stage,
     ocrConfidenceThreshold,
@@ -90,5 +108,6 @@ export function loadStageConfig(
     rejectionNotifyEmails,
     spaBaseUrl,
     ssmParameterPrefix: `/invoice-pipeline/${stage}`,
+    presignLocalSecret,
   };
 }

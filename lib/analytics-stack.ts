@@ -7,7 +7,7 @@ import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
 import * as path from "path";
-import type { StageConfig } from "./stage-config";
+import { projectRoot, type StageConfig } from "./stage-config";
 
 export interface AnalyticsStackProps extends cdk.StackProps {
   stage: string;
@@ -39,7 +39,7 @@ export class AnalyticsStack extends cdk.Stack {
     const handler = new NodejsFunction(this, "AnalyticsIngestFunction", {
       functionName: `invoice-analytics-ingest-${stage}`,
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, "..", "lambda", "analytics-ingest", "index.ts"),
+      entry: path.join(projectRoot(), "lambda", "analytics-ingest", "index.ts"),
       handler: "handler",
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,

@@ -182,7 +182,7 @@ Pointer: chain assembly — [`validateTask` → `notifyTask` → `humanChoice`](
 | ----- | ---- | ------- |
 | `GET /public/invoice/{invoiceId}` | Public (session query validates) | [`lambda/public-api`](./lambda/public-api/index.ts) |
 | `POST /public/decision` | Public (session + task token in DB) | same |
-| `POST /upload/presign` | JWT (Cognito) | [`lambda/presign-upload`](./lambda/presign-upload/index.ts) |
+| `POST /upload/presign` | **JWT (Cognito)** on **`dev` / `test` / `prod`**. On **`stage=local`** only: header **`x-presign-local-secret`** (shared secret from CDK/config — HTTP JWT authorizer omitted for LocalStack compatibility). | [`lambda/presign-upload`](./lambda/presign-upload/index.ts) |
 
 **SPA**: [`spa/src/App.tsx`](./spa/src/App.tsx) reads `invoiceId` and `session` from the query string and uses `import.meta.env.VITE_API_BASE_URL` as the API prefix.
 

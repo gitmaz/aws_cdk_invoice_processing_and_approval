@@ -1,0 +1,8 @@
+{
+  "sesFromAddress": "no-reply@localstack.test",
+  "humanReviewNotifyEmails": ["reviewer@localstack.test"],
+  "rejectionNotifyEmails": ["reviewer@localstack.test"],
+  "spaBaseUrl": "http://localhost:5173",
+  "ocrConfidenceThreshold": 82,
+  "presignLocalSecret": "localstack-presign-change-me"
+}

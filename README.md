@@ -12,6 +12,8 @@ TypeScript **AWS CDK** app for an event-driven invoice pipeline: upload to **S3*
 
 Product intent and scope notes: **`prompts.txt`** (versioned in this repo).
 
+**SPA + LocalStack (review UI, MailHog, presign, Playwright E2E):** **[user-guide.md](./user-guide.md)**.
+
 ---
 
 ## Installation guide
@@ -88,6 +90,23 @@ docker compose run --rm node20 npm run deploy:dev
 ```
 
 After deploy, note CloudFormation outputs (API URL, Cognito ids). Use them when running the SPA (see [README-dev.md — HTTP API and SPA](./README-dev.md#http-api-and-spa)).
+
+### LocalStack deploy (`stage=local`) on Windows
+
+On this repo, **local deploy means LocalStack**. On Windows, CDK asset publishing for `NodejsFunction` can fail when run inside Docker due to **S3 virtual-hosted bucket DNS**. The supported workflow is to **run CDK on the host**:
+
+```powershell
+cd maz/aws/serverless/aws_cdk_invoice_processing_and_approval
+
+# ensure LocalStack is running on the host at http://127.0.0.1:4566
+npm run deploy:local
+```
+
+If you need a different LocalStack endpoint, set `AWS_ENDPOINT_URL` (and optionally `AWS_ENDPOINT_URL_S3`) before running the script.
+
+**Important (Windows PATH):** make sure `node` and `npm` come from the **same** Node installation.
+If `Get-Command node` and `Get-Command npm` point to different places (for example, `node` from Cursor but `npm` from `C:\Program Files\nodejs\`),
+install Node **22.x** (or newer) from nodejs.org (or use nvm-windows) and remove/disable the older Node from PATH.
 
 ---
 
