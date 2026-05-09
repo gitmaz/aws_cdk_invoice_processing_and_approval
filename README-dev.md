@@ -184,14 +184,25 @@ Pointer: chain assembly — [`validateTask` → `notifyTask` → `humanChoice`](
 | `POST /public/decision` | Public (session + task token in DB) | same |
 | `POST /upload/presign` | **JWT (Cognito)** on **`dev` / `test` / `prod`**. On **`stage=local`** only: header **`x-presign-local-secret`** (shared secret from CDK/config — HTTP JWT authorizer omitted for LocalStack compatibility). | [`lambda/presign-upload`](./lambda/presign-upload/index.ts) |
 
-**SPA**: [`spa/src/App.tsx`](./spa/src/App.tsx) reads `invoiceId` and `session` from the query string and uses `import.meta.env.VITE_API_BASE_URL` as the API prefix.
+**SPA**: [`spa/src/App.tsx`](./spa/src/App.tsx) reads `invoiceId` and `session` from the query string and uses **`import.meta.env.VITE_API_BASE_URL`** as the API prefix (or the **`apiBase`** query parameter — see **[local-e2e-userguide.md](./local-e2e-userguide.md)**).
 
-### Local SPA against a deployed API
+### Local SPA — choose backend
+
+Use **[spa/.env.example](./spa/.env.example)** as a template (`copy` to **`spa/.env.local`**). Typical progression:
+
+1. **Prepare monolith** (sibling repo **`aws_cdk_invoice_processing_and_approval_prepare`**, pure Node mocks): `VITE_API_BASE_URL=http://127.0.0.1:3333`
+2. **LocalStack** (`stage=local`): paste **`HttpApiUrl`** from **`npm run deploy:local`**
+3. **AWS**: paste the deployed HTTP API URL from CDK outputs
 
 ```bash
 cd spa
 npm install
-set VITE_API_BASE_URL=https://xxxx.execute-api....amazonaws.com   # Windows
+set VITE_API_BASE_URL=https://xxxx.execute-api....amazonaws.com   # Windows CMD — AWS example
+npm run dev
+```
+
+```powershell
+$env:VITE_API_BASE_URL = "http://127.0.0.1:3333"   # prepare monolith
 npm run dev
 ```
 

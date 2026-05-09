@@ -1,8 +1,48 @@
-# Local E2E user guide — Vite SPA + LocalStack
+# Local E2E user guide — Vite SPA + backends
 
-This guide covers running the **React + Vite** approval UI under [`spa/`](./spa) against a **`stage=local`** stack on **LocalStack**: **upload → workflow → review**, **email (SES)**, and **Playwright E2E**. It is intentionally separate from general AWS deploy docs.
+This guide covers running the **React + Vite** approval UI under [`spa/`](./spa) against a backend API. Typical order: **`aws_cdk_invoice_processing_and_approval_prepare`** (pure Node mocks) → **LocalStack** (`stage=local`) → **AWS**. It is intentionally separate from general AWS deploy docs.
 
-For backend-only setup (CDK deploy, Textract mock, MailHog compose), see **[LOCALSTACK.md](./LOCALSTACK.md)**.
+The **LocalStack** path is **unchanged**: start LocalStack, **`npm run deploy:local`**, set **`VITE_API_BASE_URL`** to the stack **`HttpApiUrl`** — full detail remains in **[LOCALSTACK.md](./LOCALSTACK.md)** and in [Prerequisites (LocalStack path)](#prerequisites-localstack-path) / [Run the SPA (Vite)](#run-the-spa-vite) below. The prepare monolith is an **optional** step before that, not a replacement.
+
+For LocalStack-only setup (CDK deploy, Textract mock, MailHog compose), see **[LOCALSTACK.md](./LOCALSTACK.md)**.
+
+---
+
+## Switching the SPA backend (`VITE_API_BASE_URL`)
+
+The SPA ([`spa/src/App.tsx`](./spa/src/App.tsx)) prefixes **`GET /public/invoice/{id}`** and **`POST /public/decision`** with **`import.meta.env.VITE_API_BASE_URL`**. You can also pass **`apiBase`** on the query string (same value as the API root URL, **no trailing slash**) if you want to point at a backend **without** restarting Vite.
+
+| Backend | Set `VITE_API_BASE_URL` to | Notes |
+| ------- | -------------------------- | ----- |
+| **Prepare monolith** | **`http://127.0.0.1:3333`** (default monolith port) | Run [`aws_cdk_invoice_processing_and_approval_prepare`](../aws_cdk_invoice_processing_and_approval_prepare) (`npm run start`). Same Lambda sources as this repo; no AWS/LocalStack. |
+| **LocalStack** | **`HttpApiUrl`** from **`npm run deploy:local`** (see CDK output) | Requires LocalStack on **`AWS_ENDPOINT_URL`** when deploying. |
+| **AWS** | HTTP API URL from CDK outputs (`dev` / `test` / `prod`) | Cognito JWT on **`POST /upload/presign`** (not used by the review UI alone). |
+
+**Examples — PowerShell**
+
+```powershell
+cd spa
+$env:VITE_API_BASE_URL = "http://127.0.0.1:3333"   # prepare monolith
+npm run dev
+```
+
+```powershell
+$env:VITE_API_BASE_URL = "http://xxxxxxxx.execute-api.localhost.localstack.cloud:4566"   # LocalStack
+npm run dev
+```
+
+**Optional:** copy **[spa/.env.example](./spa/.env.example)** to **`spa/.env.local`** and uncomment one line.
+
+**Review links:** open the URL logged by **notify-human** (`invoiceId` + `session`). If **`VITE_API_BASE_URL`** is unset and you did not add **`apiBase=`** to the URL, `fetch` targets the wrong origin — always set the API base when the backend is not the same origin as Vite.
+
+### Presign secret alignment (upload / scripts only)
+
+The review SPA does **not** call **`POST /upload/presign`**. If you use curl, Playwright, or other tools against **`/upload/presign`** and **`/upload/complete`**:
+
+- **CDK `stage=local`** uses **`invoice.local.presignLocalSecret`** (default in **`cdk.json`**: **`localstack-presign-change-me`**).
+- **Prepare monolith** defaults to **`prepare-local-secret`** unless you set **`PRESIGN_LOCAL_SECRET`** when starting it.
+
+For one shared secret across both, start prepare with **`PRESIGN_LOCAL_SECRET=localstack-presign-change-me`** (or change **`cdk.json`** / **`config/local.json`** to match your prepare env).
 
 ---
 
@@ -16,11 +56,13 @@ For backend-only setup (CDK deploy, Textract mock, MailHog compose), see **[LOCA
 
 ---
 
-## Prerequisites
+## Prerequisites (LocalStack path)
 
 1. **LocalStack** running (default `http://localhost:4566` from the host).
 2. **This CDK app** deployed with **`stage=local`** (`npm run deploy:local` from the repo root — see [LOCALSTACK.md](./LOCALSTACK.md)).
 3. **Node 20+** for the SPA (recommended: Node 22).
+
+For the **prepare monolith** path you only need **Node**, the sibling **`aws_cdk_invoice_processing_and_approval_prepare`** checkout running (`npm run start`), and **`VITE_API_BASE_URL=http://127.0.0.1:3333`** — no LocalStack deploy.
 
 Collect **stack outputs** after deploy (CDK prints them; or query CloudFormation on LocalStack):
 
@@ -186,4 +228,5 @@ The suite **skips** when **`PLAYWRIGHT_API_BASE_URL`** is unset (Vitest **`npm t
 
 - **[README-dev.md](./README-dev.md)** — HTTP routes, security model, Cognito.  
 - **[README-test.md](./README-test.md)** — Mock API + Vitest without AWS.  
-- **[LOCALSTACK.md](./LOCALSTACK.md)** — Deploy/destroy `stage=local`.
+- **[LOCALSTACK.md](./LOCALSTACK.md)** — Deploy/destroy `stage=local`.  
+- **Prepare monolith** — clone **[gitmaz/aws_cdk_invoice_processing_and_approval_prepare](https://github.com/gitmaz/aws_cdk_invoice_processing_and_approval_prepare)** next to this repo on disk; **`npm run start`** (default **`http://127.0.0.1:3333`**).

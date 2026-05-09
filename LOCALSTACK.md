@@ -191,4 +191,4 @@ Set **`PLAYWRIGHT_MAILHOG_URL=http://127.0.0.1:8025`** when MailHog is up if you
 
 - Stage list and URLs: [README.md](./README.md), [README-dev.md](./README-dev.md)
 - Unit tests (including Textract mock helpers): [README-test.md](./README-test.md)
-- Local Vite + LocalStack (SPA, MailHog, Playwright E2E): [local-e2e-userguide.md](./local-e2e-userguide.md)
+- Local Vite + backends (prepare monolith → LocalStack → AWS, **`VITE_API_BASE_URL`**): [local-e2e-userguide.md](./local-e2e-userguide.md), [spa/.env.example](./spa/.env.example)

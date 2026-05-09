@@ -8,6 +8,10 @@ dist/
 spa/node_modules/
 spa/dist/
 
+# Vite local env (keep spa/.env.example committed)
+spa/.env.local
+spa/.env.*.local
+
 playwright-report/
 test-results/
 blob-report/
