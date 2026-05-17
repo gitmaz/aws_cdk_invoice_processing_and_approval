@@ -1,12 +1,12 @@
 import { execFileSync } from "node:child_process";
 
 /**
- * After `npm run deploy:local`, print PowerShell-friendly env lines for Playwright.
+ * After `npm run deploy:local`, print PowerShell-friendly env for **local** E2E (LocalStack).
  * Requires AWS CLI and a completed **InvoiceProcessing-local** stack on LocalStack.
  *
  * Usage:
- *   node scripts/print-playwright-env.mjs
- *   $env:AWS_ENDPOINT_URL = "http://localhost:4566"; node scripts/print-playwright-env.mjs
+ *   npm run playwright:print-env:local
+ *   $env:AWS_ENDPOINT_URL = "http://localhost:4566"; npm run playwright:print-env:local
  */
 
 const endpoint = process.env.AWS_ENDPOINT_URL ?? "http://127.0.0.1:4566";
@@ -54,6 +54,7 @@ try {
   console.log(`$env:AWS_REGION = "${region}"`);
   console.log(`$env:PLAYWRIGHT_PRESIGN_LOCAL_SECRET = "localstack-presign-change-me"`);
   console.log(`$env:PLAYWRIGHT_INVOICES_TABLE = "invoice-records-local"`);
+  console.log(`\n# Then: npm run test:e2e:local`);
 } catch (e) {
   const msg = e.stderr?.toString?.() ?? e.stdout?.toString?.() ?? e.message ?? String(e);
   console.error(msg.trim());

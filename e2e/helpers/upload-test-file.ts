@@ -4,17 +4,21 @@ export const MINIMAL_PNG = Buffer.from(
   "base64",
 );
 
+export type PresignUploadMode = "local-secret" | "cognito-jwt";
+
 export async function presignAndUpload(params: {
   apiBaseUrl: string;
-  /** Recommended for `stage=local` / LocalStack Community (see presign Lambda). */
+  mode: PresignUploadMode;
+  /** Required when `mode` is `local-secret` (LocalStack `stage=local`). */
   presignLocalSecret?: string;
-  /** AWS-style path when Cognito JWT works with your API authorizer. */
+  /** Required when `mode` is `cognito-jwt` (deployed dev/test/prod). */
   idToken?: string;
   body?: Buffer;
   contentType?: string;
 }): Promise<void> {
   const {
     apiBaseUrl,
+    mode,
     presignLocalSecret,
     idToken,
     body = MINIMAL_PNG,
@@ -24,12 +28,16 @@ export async function presignAndUpload(params: {
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };
-  if (presignLocalSecret) {
+  if (mode === "local-secret") {
+    if (!presignLocalSecret) {
+      throw new Error("presignAndUpload(local-secret): presignLocalSecret is required");
+    }
     headers["x-presign-local-secret"] = presignLocalSecret;
-  } else if (idToken) {
-    headers.authorization = `Bearer ${idToken}`;
   } else {
-    throw new Error("presignAndUpload: set presignLocalSecret (local) or idToken (JWT)");
+    if (!idToken) {
+      throw new Error("presignAndUpload(cognito-jwt): idToken is required");
+    }
+    headers.authorization = `Bearer ${idToken}`;
   }
 
   const presignRes = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/upload/presign`, {
@@ -60,13 +68,12 @@ export async function presignAndUpload(params: {
   }
 
   // LocalStack Community: S3 → SQS notifications are not consistently applied via CDK/CloudFormation.
-  // For stage=local tests we explicitly kick off ingestion after upload.
-  if (presignLocalSecret && presignJson.bucket && presignJson.objectKey) {
+  if (mode === "local-secret" && presignJson.bucket && presignJson.objectKey) {
     const completeRes = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/upload/complete`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-presign-local-secret": presignLocalSecret,
+        "x-presign-local-secret": presignLocalSecret!,
       },
       body: JSON.stringify({ bucket: presignJson.bucket, key: presignJson.objectKey }),
     });

@@ -12,8 +12,16 @@ export async function waitForAwaitingHumanReview(params: {
   notBeforeMs: number;
   pollMs?: number;
   timeoutMs?: number;
+  /** Shown on timeout (e.g. `stage=local` vs `stage=dev`). */
+  stageHint?: string;
 }): Promise<ReviewKeys> {
-  const { tableName, notBeforeMs, pollMs = 2000, timeoutMs = 120_000 } = params;
+  const {
+    tableName,
+    notBeforeMs,
+    pollMs = 2000,
+    timeoutMs = 120_000,
+    stageHint = "local",
+  } = params;
   const deadline = Date.now() + timeoutMs;
   const skewMs = 60_000;
 
@@ -48,6 +56,7 @@ export async function waitForAwaitingHumanReview(params: {
   }
 
   throw new Error(
-    `Timeout waiting for status AWAITING_HUMAN on ${tableName}. Is LocalStack up and InvoiceProcessing-local deployed (stage=local)?`,
+    `Timeout (${timeoutMs}ms) waiting for status AWAITING_HUMAN on ${tableName} (${stageHint}). ` +
+      `Check pipeline (S3→SQS→Step Functions), IAM (DynamoDB Scan), and PLAYWRIGHT_REVIEW_TIMEOUT_MS.`,
   );
 }
