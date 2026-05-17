@@ -6,6 +6,7 @@ import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import { Construct } from "constructs";
 
 import { useDockerLambdaBundling } from "./bundling-flags";
+import { spaPrebuiltLocalBundling } from "./spa-local-bundle";
 import { envTruthySpa, type SpaHostingMode } from "./resolve-spa-hosting";
 import { projectRoot } from "./stage-config";
 
@@ -82,6 +83,7 @@ export class SpaHostingConstruct extends Construct {
       image: lambda.Runtime.NODEJS_20_X.bundlingImage,
       forceDockerBundling: forceDocker,
       user: "root",
+      ...(usePrebuilt ? { local: spaPrebuiltLocalBundling(root, mode === "ec2" ? "s3" : "lambda") } : {}),
     };
 
     if (mode === "lambda") {
