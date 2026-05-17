@@ -212,15 +212,15 @@ npm run dev
 
 | Mode | How | Review email links (`SPA_BASE_URL`) |
 | ---- | --- | ------------------------------------- |
-| **`skip`** (default) | Manual: Vite dev, your own host, or later S3+CloudFront | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
-| **`lambda`** | Lambda **function URL** serves built `spa/dist` | Auto: **`SpaLambdaFunctionUrl`** output (overrides config for notify Lambda) |
+| **`lambda`** (default) | Lambda **function URL** serves built `spa/dist` | Auto: **`SpaLambdaFunctionUrl`** output (overrides config for notify Lambda) |
+| **`none`** | Manual: Vite dev, your own host, or later S3+CloudFront | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
 | **`ec2`** | S3 artifact bucket + sync to nginx | **`spaBaseUrl`** must be your public nginx URL |
 
 Set via environment (wins) or CDK context in [`cdk.json`](./cdk.json) (`spaHosting`):
 
 ```powershell
 # Manual host (fast API-only deploy; same as today)
-$env:SPA_HOSTING = "skip"
+$env:SPA_HOSTING = "none"
 npm run deploy:dev
 
 # Lambda function URL (cheaper than CloudFront while experimenting)

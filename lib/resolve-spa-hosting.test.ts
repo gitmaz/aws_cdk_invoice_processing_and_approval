@@ -18,21 +18,21 @@ describe("resolveSpaHosting", () => {
     return resolveSpaHosting(stack);
   }
 
-  it("defaults to skip (no CDK SPA assets)", () => {
-    expect(mode()).toBe("skip");
+  it("defaults to lambda", () => {
+    expect(mode()).toBe("lambda");
   });
 
-  it("accepts none as deprecated alias for skip", () => {
-    expect(mode(undefined, "none")).toBe("skip");
-    expect(mode("none")).toBe("skip");
+  it("accepts none", () => {
+    expect(mode(undefined, "none")).toBe("none");
+    expect(mode("none")).toBe("none");
+  });
+
+  it("accepts skip as deprecated alias for none", () => {
+    expect(mode(undefined, "skip")).toBe("none");
   });
 
   it("prefers SPA_HOSTING env over context", () => {
     expect(mode("ec2", "lambda")).toBe("lambda");
-  });
-
-  it("reads context spaHosting", () => {
-    expect(mode("lambda")).toBe("lambda");
   });
 
   it("throws on invalid mode", () => {

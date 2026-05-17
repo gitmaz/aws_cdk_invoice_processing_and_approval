@@ -64,7 +64,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
     const spaHostingMode = resolveSpaHosting(this);
     const spaHosting =
-      spaHostingMode !== "skip" ? new SpaHostingConstruct(this, "SpaHosting", { stage, mode: spaHostingMode }) : undefined;
+      spaHostingMode !== "none" ? new SpaHostingConstruct(this, "SpaHosting", { stage, mode: spaHostingMode }) : undefined;
 
     const spaBaseUrlForEmails =
       spaHostingMode === "lambda" && spaHosting?.lambdaFunctionUrl
@@ -388,7 +388,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
     new cdk.CfnOutput(this, "SpaHostingMode", {
       value: spaHostingMode,
       description:
-        "From SPA_HOSTING / -c spaHosting: skip (no SPA in stack) | lambda (function URL) | ec2 (S3 for nginx sync)",
+        "From SPA_HOSTING / -c spaHosting: none (no SPA in stack) | lambda (function URL) | ec2 (S3 for nginx sync)",
     });
     new cdk.CfnOutput(this, "SpaBaseUrlForEmails", {
       value: spaBaseUrlForEmails,

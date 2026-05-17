@@ -1,7 +1,7 @@
 
 For building frontend (SPA uses prebuilt `spa/dist` only — no Docker):
 
-$env:SPA_HOSTING = "skip"
+$env:SPA_HOSTING = "none"
 npm run deploy:dev
 # spa/.env.dev → VITE_API_BASE_URL = HttpApiUrl from stack output
 npm run spa:build:dev
