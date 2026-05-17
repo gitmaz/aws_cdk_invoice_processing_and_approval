@@ -208,6 +208,40 @@ npm run dev
 
 **CORS** on the HTTP API is open for dev (`allowOrigins: ["*"]` in [`invoice-processing-stack.ts`](./lib/invoice-processing-stack.ts)); tighten for production (specific SPA origin + credentials policy if you add cookies).
 
+### SPA hosting at deploy time (`SPA_HOSTING`)
+
+| Mode | How | Review email links (`SPA_BASE_URL`) |
+| ---- | --- | ------------------------------------- |
+| **`none`** (default) | Manual: Vite dev, your own host, or later S3+CloudFront | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
+| **`lambda`** | Lambda **function URL** serves built `spa/dist` | Auto: **`SpaLambdaFunctionUrl`** output (overrides config for notify Lambda) |
+| **`ec2`** | S3 artifact bucket + sync to nginx | **`spaBaseUrl`** must be your public nginx URL |
+
+Set via environment (wins) or CDK context in [`cdk.json`](./cdk.json) (`spaHosting`):
+
+```powershell
+# Manual host (fast API-only deploy; same as today)
+$env:SPA_HOSTING = "none"
+npm run deploy:dev
+
+# Lambda function URL (cheaper than CloudFront while experimenting)
+# 1) Put HttpApiUrl in spa/.env.dev, then:
+npm run spa:build:dev
+$env:SPA_HOSTING = "lambda"
+$env:SPA_USE_PREBUILT_DIST = "1"
+npm run deploy:dev -- --require-approval never
+# Open SpaLambdaFunctionUrl; API calls use VITE_API_BASE_URL baked at build time.
+```
+
+| Build script | Env file |
+| ------------ | -------- |
+| **`npm run spa:build:dev`** | **`spa/.env.dev`** |
+| **`npm run spa:build:test`** | **`spa/.env.test`** |
+| **`npm run spa:build:prod`** | **`spa/.env.prod`** |
+
+Implementation: [`lib/resolve-spa-hosting.ts`](./lib/resolve-spa-hosting.ts), [`lib/spa-hosting-construct.ts`](./lib/spa-hosting-construct.ts), [`lambda/spa-static-host/handler.cjs`](./lambda/spa-static-host/handler.cjs).
+
+**Synth note:** `SPA_HOSTING=lambda` bundles the SPA asset (Docker on Windows: set **`CDK_FORCE_DOCKER_BUNDLING=1`**). Use **`SPA_USE_PREBUILT_DIST=1`** after **`npm run spa:build:<stage>`** to copy `spa/dist` only.
+
 ---
 
 ## Operational checklist (AWS)

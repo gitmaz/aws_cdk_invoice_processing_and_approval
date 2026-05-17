@@ -18,6 +18,8 @@ import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
 import * as path from "path";
+import { resolveSpaHosting } from "./resolve-spa-hosting";
+import { SpaHostingConstruct } from "./spa-hosting-construct";
 import { projectRoot, type StageConfig } from "./stage-config";
 
 export interface InvoiceProcessingStackProps extends cdk.StackProps {
@@ -60,12 +62,21 @@ export class InvoiceProcessingStack extends cdk.Stack {
         stage === "prod" ? { pointInTimeRecoveryEnabled: true } : undefined,
     });
 
+    const spaHostingMode = resolveSpaHosting(this);
+    const spaHosting =
+      spaHostingMode !== "none" ? new SpaHostingConstruct(this, "SpaHosting", { stage, mode: spaHostingMode }) : undefined;
+
+    const spaBaseUrlForEmails =
+      spaHostingMode === "lambda" && spaHosting?.lambdaFunctionUrl
+        ? spaHosting.lambdaFunctionUrl
+        : config.spaBaseUrl.replace(/\/$/, "");
+
     const commonLambdaEnv = {
       INVOICES_TABLE_NAME: invoicesTable.tableName,
       STAGE: stage,
       OCR_CONFIDENCE_THRESHOLD: String(config.ocrConfidenceThreshold),
       SES_FROM_ADDRESS: config.sesFromAddress,
-      SPA_BASE_URL: config.spaBaseUrl,
+      SPA_BASE_URL: spaBaseUrlForEmails,
       HUMAN_REVIEW_EMAILS: config.humanReviewNotifyEmails.join(","),
       REJECTION_NOTIFY_EMAILS: config.rejectionNotifyEmails.join(","),
       EVENT_BUS_NAME: props.analyticsEventBus.eventBusName,
@@ -373,5 +384,16 @@ export class InvoiceProcessingStack extends cdk.Stack {
     new cdk.CfnOutput(this, "CognitoUserPoolId", { value: userPool.userPoolId });
     new cdk.CfnOutput(this, "CognitoClientId", { value: userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, "CognitoIssuer", { value: issuer });
+
+    new cdk.CfnOutput(this, "SpaHostingMode", {
+      value: spaHostingMode,
+      description:
+        "From SPA_HOSTING / -c spaHosting: none (manual host) | lambda (function URL) | ec2 (S3 for nginx sync)",
+    });
+    new cdk.CfnOutput(this, "SpaBaseUrlForEmails", {
+      value: spaBaseUrlForEmails,
+      description:
+        "Base URL in human-review emails (Lambda function URL when SPA_HOSTING=lambda, else config spaBaseUrl)",
+    });
   }
 }

@@ -61,7 +61,7 @@ Ensure your account/region are set (for example `CDK_DEFAULT_ACCOUNT`, `CDK_DEFA
 npm run deploy:dev
 ```
 
-After deploy, note CloudFormation outputs (API URL, Cognito ids). Use them when running the SPA (see [README-dev.md — HTTP API and SPA](./README-dev.md#http-api-and-spa)).
+After deploy, note CloudFormation outputs (API URL, Cognito ids). Use them when running the SPA (see [README-dev.md — HTTP API and SPA](./README-dev.md#http-api-and-spa)). Optional: deploy the built SPA to a **Lambda function URL** with **`SPA_HOSTING=lambda`** (see [SPA hosting at deploy time](./README-dev.md#spa-hosting-at-deploy-time-spa_hosting)).
 
 ### LocalStack deploy (`stage=local`) on Windows
 

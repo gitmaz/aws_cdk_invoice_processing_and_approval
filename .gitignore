@@ -8,9 +8,10 @@ dist/
 spa/node_modules/
 spa/dist/
 
-# Vite local env (keep spa/.env.example committed)
-spa/.env.local
-spa/.env.*.local
+# Vite env (keep spa/.env.example committed)
+spa/.env
+spa/.env.*
+!spa/.env.example
 
 playwright-report/
 test-results/
