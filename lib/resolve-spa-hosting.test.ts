@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import { App, Stack } from "aws-cdk-lib";
 import { resolveSpaHosting } from "./resolve-spa-hosting";
 
@@ -18,8 +18,13 @@ describe("resolveSpaHosting", () => {
     return resolveSpaHosting(stack);
   }
 
-  it("defaults to none (manual host)", () => {
-    expect(mode()).toBe("none");
+  it("defaults to skip (no CDK SPA assets)", () => {
+    expect(mode()).toBe("skip");
+  });
+
+  it("accepts none as deprecated alias for skip", () => {
+    expect(mode(undefined, "none")).toBe("skip");
+    expect(mode("none")).toBe("skip");
   });
 
   it("prefers SPA_HOSTING env over context", () => {

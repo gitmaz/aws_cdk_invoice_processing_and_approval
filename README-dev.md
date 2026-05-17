@@ -212,7 +212,7 @@ npm run dev
 
 | Mode | How | Review email links (`SPA_BASE_URL`) |
 | ---- | --- | ------------------------------------- |
-| **`none`** (default) | Manual: Vite dev, your own host, or later S3+CloudFront | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
+| **`skip`** (default) | Manual: Vite dev, your own host, or later S3+CloudFront | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
 | **`lambda`** | Lambda **function URL** serves built `spa/dist` | Auto: **`SpaLambdaFunctionUrl`** output (overrides config for notify Lambda) |
 | **`ec2`** | S3 artifact bucket + sync to nginx | **`spaBaseUrl`** must be your public nginx URL |
 
@@ -220,14 +220,13 @@ Set via environment (wins) or CDK context in [`cdk.json`](./cdk.json) (`spaHosti
 
 ```powershell
 # Manual host (fast API-only deploy; same as today)
-$env:SPA_HOSTING = "none"
+$env:SPA_HOSTING = "skip"
 npm run deploy:dev
 
 # Lambda function URL (cheaper than CloudFront while experimenting)
 # 1) Put HttpApiUrl in spa/.env.dev, then:
 npm run spa:build:dev
 $env:SPA_HOSTING = "lambda"
-$env:SPA_USE_PREBUILT_DIST = "1"
 npm run deploy:dev -- --require-approval never
 # Open SpaLambdaFunctionUrl; API calls use VITE_API_BASE_URL baked at build time.
 ```
@@ -238,9 +237,9 @@ npm run deploy:dev -- --require-approval never
 | **`npm run spa:build:test`** | **`spa/.env.test`** |
 | **`npm run spa:build:prod`** | **`spa/.env.prod`** |
 
-Implementation: [`lib/resolve-spa-hosting.ts`](./lib/resolve-spa-hosting.ts), [`lib/spa-hosting-construct.ts`](./lib/spa-hosting-construct.ts), [`lambda/spa-static-host/handler.cjs`](./lambda/spa-static-host/handler.cjs).
+Implementation: [`lib/resolve-spa-hosting.ts`](./lib/resolve-spa-hosting.ts), [`lib/spa-hosting-construct.ts`](./lib/spa-hosting-construct.ts), [`lib/spa-local-bundle.ts`](./lib/spa-local-bundle.ts), [`lambda/spa-static-host/handler.cjs`](./lambda/spa-static-host/handler.cjs).
 
-**Synth note:** `SPA_HOSTING=lambda` bundles the SPA asset (Docker on Windows: set **`CDK_FORCE_DOCKER_BUNDLING=1`**). Use **`SPA_USE_PREBUILT_DIST=1`** after **`npm run spa:build:<stage>`** to copy `spa/dist` only.
+**Synth note:** With **`SPA_HOSTING=lambda`** or **`ec2`**, run **`npm run spa:build:<stage>`** first. CDK copies **`spa/dist`** on the host only (no Docker). Synth/deploy **fails** if **`spa/dist`** is missing.
 
 ---
 

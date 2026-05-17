@@ -22,7 +22,7 @@
     "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
     "@aws-cdk/aws-iam:minimizePolicies": true,
     "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
-    "spaHosting": "none",
+    "spaHosting": "skip",
     "invoice": {
       "dev": {
         "spaBaseUrl": "http://localhost:5173",

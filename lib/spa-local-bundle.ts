@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as lambda from "aws-cdk-lib/aws-lambda";
 
 function copyDirRecursive(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
@@ -11,19 +12,29 @@ function copyDirRecursive(src: string, dest: string): void {
   }
 }
 
+function spaBuildScript(stage: string): string {
+  if (stage === "local") return "npm run spa:build:local";
+  if (stage === "test") return "npm run spa:build:test";
+  if (stage === "prod") return "npm run spa:build:prod";
+  return "npm run spa:build:dev";
+}
+
 /**
- * Copy prebuilt `spa/dist` without Docker (Windows-friendly when SPA_USE_PREBUILT_DIST=1).
+ * Copy prebuilt `spa/dist` on the host. Throws if missing so CDK never falls back to Docker.
  */
 export function spaPrebuiltLocalBundling(
   root: string,
   target: "lambda" | "s3",
+  stage: string,
 ): { tryBundle(outputDir: string): boolean } {
+  const buildCmd = spaBuildScript(stage);
   return {
     tryBundle(outputDir: string): boolean {
       const distDir = path.join(root, "spa", "dist");
       if (!fs.existsSync(distDir)) {
-        console.error("spa/dist missing. Run: npm run spa:build:dev");
-        return false;
+        throw new Error(
+          `spa/dist is missing. Run ${buildCmd} (or set SPA_HOSTING=skip to omit SPA assets).`,
+        );
       }
       try {
         if (target === "lambda") {
@@ -37,9 +48,18 @@ export function spaPrebuiltLocalBundling(
         }
         return true;
       } catch (e) {
-        console.error("spa prebuilt local bundle failed:", e);
-        return false;
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`Failed to copy spa/dist into CDK asset output: ${msg}`);
       }
     },
+  };
+}
+
+/** CDK asset bundling for SPA — local copy only (no Docker build step). */
+export function spaAssetBundling(root: string, target: "lambda" | "s3", stage: string) {
+  return {
+    image: lambda.Runtime.NODEJS_20_X.bundlingImage,
+    local: spaPrebuiltLocalBundling(root, target, stage),
+    command: [],
   };
 }

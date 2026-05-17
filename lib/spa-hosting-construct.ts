@@ -5,9 +5,8 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import { Construct } from "constructs";
 
-import { useDockerLambdaBundling } from "./bundling-flags";
-import { spaPrebuiltLocalBundling } from "./spa-local-bundle";
-import { envTruthySpa, type SpaHostingMode } from "./resolve-spa-hosting";
+import { spaAssetBundling } from "./spa-local-bundle";
+import type { SpaHostingMode } from "./resolve-spa-hosting";
 import { projectRoot } from "./stage-config";
 
 export interface SpaHostingConstructProps {
@@ -16,12 +15,12 @@ export interface SpaHostingConstructProps {
 }
 
 /**
- * Publishes the Vite approval SPA from **`spa/`** at deploy time.
+ * Publishes the Vite approval SPA from **`spa/dist`** (built on the host before synth/deploy).
  *
  * - **`lambda`**: Lambda + function URL serves `spa/dist` (SPA fallback to `index.html`).
  * - **`ec2`**: S3 bucket + deployment for sync to nginx on EC2.
  *
- * Env: **`SPA_HOSTING`**, **`SPA_USE_PREBUILT_DIST`**, **`SPA_EC2_*`** — see README-dev.md.
+ * Env: **`SPA_HOSTING`**, **`SPA_EC2_*`** — see README-dev.md. Synth fails if `spa/dist` is missing.
  */
 export class SpaHostingConstruct extends Construct {
   /** Set when `mode === "lambda"` (no trailing slash). */
@@ -32,70 +31,14 @@ export class SpaHostingConstruct extends Construct {
     const { stage, mode } = props;
     const stack = Stack.of(this);
     const root = projectRoot();
-    const forceDocker = useDockerLambdaBundling(this);
-    const usePrebuilt = envTruthySpa("SPA_USE_PREBUILT_DIST");
-
-    const spaBundlingCommand = usePrebuilt
-      ? [
-          "bash",
-          "-c",
-          [
-            "set -e",
-            'test -d spa/dist || { echo "spa/dist missing. Run npm run spa:build or unset SPA_USE_PREBUILT_DIST." >&2; exit 1; }',
-            "mkdir -p /asset-output/dist",
-            "cp -r spa/dist/. /asset-output/dist/",
-            "cp lambda/spa-static-host/handler.cjs /asset-output/index.js",
-          ].join(" && "),
-        ]
-      : [
-          "bash",
-          "-c",
-          [
-            "set -e",
-            "cd spa",
-            'if [ -f package-lock.json ]; then npm ci; else npm install; fi',
-            "npm run build",
-            "mkdir -p /asset-output/dist",
-            "cp -r dist/. /asset-output/dist/",
-            "cp ../lambda/spa-static-host/handler.cjs /asset-output/index.js",
-          ].join(" && "),
-        ];
-
-    const spaBundlingForS3 = usePrebuilt
-      ? [
-          "bash",
-          "-c",
-          [
-            "set -e",
-            'test -d spa/dist || { echo "spa/dist missing. Run npm run spa:build or unset SPA_USE_PREBUILT_DIST." >&2; exit 1; }',
-            "cp -r spa/dist/. /asset-output/",
-          ].join(" && "),
-        ]
-      : [
-          "bash",
-          "-c",
-          ["set -e", "cd spa", 'if [ -f package-lock.json ]; then npm ci; else npm install; fi', "npm run build", "cp -r dist/. /asset-output/"].join(
-            " && ",
-          ),
-        ];
-
-    const commonBundling = {
-      image: lambda.Runtime.NODEJS_20_X.bundlingImage,
-      forceDockerBundling: forceDocker,
-      user: "root",
-      ...(usePrebuilt ? { local: spaPrebuiltLocalBundling(root, mode === "ec2" ? "s3" : "lambda") } : {}),
-    };
+    const bundleTarget = mode === "ec2" ? "s3" : "lambda";
+    const assetBundling = spaAssetBundling(root, bundleTarget, stage);
 
     if (mode === "lambda") {
       const fn = new lambda.Function(this, "SpaStaticFn", {
         runtime: lambda.Runtime.NODEJS_20_X,
         handler: "index.handler",
-        code: lambda.Code.fromAsset(root, {
-          bundling: {
-            ...commonBundling,
-            command: spaBundlingCommand,
-          },
-        }),
+        code: lambda.Code.fromAsset(root, { bundling: assetBundling }),
         timeout: Duration.seconds(10),
         memorySize: 256,
         tracing: lambda.Tracing.DISABLED,
@@ -133,14 +76,7 @@ export class SpaHostingConstruct extends Construct {
           });
 
       new s3deploy.BucketDeployment(this, "SpaEc2Deploy", {
-        sources: [
-          s3deploy.Source.asset(root, {
-            bundling: {
-              ...commonBundling,
-              command: spaBundlingForS3,
-            },
-          }),
-        ],
+        sources: [s3deploy.Source.asset(root, { bundling: assetBundling })],
         destinationBucket: bucket,
         destinationKeyPrefix: prefix,
         memoryLimit: 4096,

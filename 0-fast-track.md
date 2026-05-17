@@ -1,17 +1,11 @@
 
-For building frontend:
+For building frontend (SPA uses prebuilt `spa/dist` only — no Docker):
 
-Manual (unchanged):
-
-$env:SPA_HOSTING = "none"   # or omit — default
+$env:SPA_HOSTING = "skip"
 npm run deploy:dev
-Lambda function URL:
-
-
-# 1) spa/.env.dev → VITE_API_BASE_URL = HttpApiUrl from last deploy
+# spa/.env.dev → VITE_API_BASE_URL = HttpApiUrl from stack output
 npm run spa:build:dev
 $env:SPA_HOSTING = "lambda"
-$env:SPA_USE_PREBUILT_DIST = "1"
 npm run deploy:dev -- --require-approval never
 # Open SpaLambdaFunctionUrl; review links in email use that URL
 
@@ -52,29 +46,7 @@ npm run build
 npm run synth -- -c stage=dev --profile my-dev
 
 
-Note:
-first do a deployment of API only to get the ape base url
-API-only deploy (SPA_HOSTING=none)
-(otherwise docker based hosting is failing for some reason)
-
-then update .env.dev, do spa:build:dev and then use
-SPA_USE_PREBUILT_DIST=1 and do
-npm run deploy:dev again
-
-
-$env:SPA_HOSTING = "lambda"
-$env:SPA_USE_PREBUILT_DIST = "1"
-npm run synth -- -c stage=dev --profile my-dev
-
-(after synthing once and deploying, get the api base url then do update api base url in .env.dev (for example:)
-
-VITE_API_BASE_URL=https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com
-
-then do:
-
-npm ci --prefix spa
-npm run spa:build:dev
-)
+Note: with SPA_HOSTING=lambda, synth/deploy fails until spa/dist exists (run npm run spa:build:dev first).
 
 @@then deploy:
 npm run deploy:dev -- --profile my-dev --require-approval never
