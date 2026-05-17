@@ -104,6 +104,12 @@ Cognito test user was created automatically (e2e-invoice-dev@example.invalid).
 @@FINAL e2e dev test: (it will set the required env variables by itself)
 npm run test:e2e:dev:headed
 
+@manual testing:
+spa base url
+https://4zpmth3ymohrjhvv2rkka7kriq0qdiol.lambda-url.ap-southeast-2.on.aws
+
+review page: (does not need login, sesion id takes care of authorisation)
+https://4zpmth3ymohrjhvv2rkka7kriq0qdiol.lambda-url.ap-southeast-2.on.aws/?invoiceId=<INVOICE_ID>&session=<REVIEW_SESSION_ID>&apiBase=https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com
 
 
 @@checking if stack is completed deploy:

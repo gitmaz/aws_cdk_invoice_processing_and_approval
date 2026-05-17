@@ -58,6 +58,11 @@ try {
   console.log(`$env:PLAYWRIGHT_REVIEW_TIMEOUT_MS = "300000"`);
   console.log(`$env:PLAYWRIGHT_TEST_EMAIL = "e2e-invoice-dev@example.invalid"`);
   console.log(`$env:PLAYWRIGHT_TEST_PASSWORD = "TestPass123!"`);
+  console.log("");
+  console.log("# spa/.env.dev (rebuild SPA after editing):");
+  console.log(`# VITE_API_BASE_URL=${apiUrl.replace(/\/$/, "")}`);
+  console.log(`# VITE_COGNITO_USER_POOL_ID=${poolId}`);
+  console.log(`# VITE_COGNITO_CLIENT_ID=${clientId}`);
   if (spaUrl) {
     console.log(`# Optional — use deployed SPA instead of local Vite:`);
     console.log(`# $env:PLAYWRIGHT_SKIP_WEBSERVER = "1"`);
