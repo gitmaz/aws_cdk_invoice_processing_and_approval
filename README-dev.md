@@ -15,10 +15,11 @@ This document complements [README.md](./README.md). It explains **how the repo i
 7. [Security model](#security-model)
 8. [DynamoDB and EventBridge contracts](#dynamodb-and-eventbridge-contracts)
 9. [HTTP API and SPA](#http-api-and-spa)
-10. [Operational checklist (AWS)](#operational-checklist-aws)
-11. [Snippets reference](#snippets-reference)
-12. [Node 20 via Docker (Windows and others)](#node-20-via-docker-windows-and-others)
-13. [Testing (Vitest + mock API)](./README-test.md)
+10. [Review UI: simple vs advanced](#review-ui-simple-vs-advanced)
+11. [Operational checklist (AWS)](#operational-checklist-aws)
+12. [Snippets reference](#snippets-reference)
+13. [Node 20 via Docker (Windows and others)](#node-20-via-docker-windows-and-others)
+14. [Testing (Vitest + mock API)](./README-test.md)
 
 ---
 
@@ -180,11 +181,64 @@ Pointer: chain assembly — [`validateTask` → `notifyTask` → `humanChoice`](
 
 | Route | Auth | Handler |
 | ----- | ---- | ------- |
-| `GET /public/invoice/{invoiceId}` | Public (session query validates) | [`lambda/public-api`](./lambda/public-api/index.ts) |
+| `GET /public/invoice/{invoiceId}` | Public (`session` query validates) | [`lambda/public-api`](./lambda/public-api/index.ts) — JSON review payload |
+| `GET /public/invoice/{invoiceId}?session=…&document=1` | Same | Same handler — streams invoice PNG/PDF bytes for advanced UI |
 | `POST /public/decision` | Public (session + task token in DB) | same |
 | `POST /upload/presign` | **JWT (Cognito)** on **`dev` / `test` / `prod`**. On **`stage=local`** only: header **`x-presign-local-secret`** (shared secret from CDK/config — HTTP JWT authorizer omitted for LocalStack compatibility). | [`lambda/presign-upload`](./lambda/presign-upload/index.ts) |
 
 **SPA**: [`spa/src/App.tsx`](./spa/src/App.tsx) reads `invoiceId` and `session` from the query string and uses **`import.meta.env.VITE_API_BASE_URL`** as the API prefix (or the **`apiBase`** query parameter — see **[local-e2e-userguide.md](./local-e2e-userguide.md)**).
+
+### Review UI: simple vs advanced
+
+Implemented in [`spa/src/ReviewPage.tsx`](./spa/src/ReviewPage.tsx) via [`getReviewRenderMode()`](./spa/src/config.ts) (`simple` | `advanced`).
+
+| Mode | UI | When to use |
+| ---- | --- | ----------- |
+| **`simple`** | Editable/read-only JSON (`ReviewPageSimple`) | Default; works for any OCR payload |
+| **`advanced`** | Document image + positioned fields (`ReviewPageAdvanced`); **Ctrl+click** toggles overlay visibility | PNG/JPEG uploads with Textract `SummaryFields` geometry |
+
+**Precedence:** `?reviewRender=` on the URL, then **`VITE_REVIEW_RENDER`** from the Vite env file used at build time ([`spa/.env.example`](./spa/.env.example)).
+
+**Use advanced without rebuilding the SPA** — append to the review link (from SES or manual testing):
+
+```text
+https://<spa-origin>/?invoiceId=<uuid>&session=<uuid>&apiBase=https://<http-api-url>&reviewRender=advanced
+```
+
+`apiBase` should be the **HTTP API** URL (CDK output **`HttpApiUrl`**), not the SPA Lambda function URL. The advanced page loads the scan via the API (`documentUrl` with `document=1`).
+
+**Default the whole deployment to advanced** — in `spa/.env.dev` (or `.env.test` / `.env.prod`):
+
+```env
+VITE_REVIEW_RENDER=advanced
+```
+
+Then rebuild and redeploy the static bundle:
+
+```bash
+npm run spa:build:dev
+# If SPA_HOSTING=lambda:
+npm run deploy:dev
+```
+
+**Local Vite** (`npm run spa:dev` from `spa/`):
+
+```powershell
+# optional: advanced for all local sessions
+$env:VITE_REVIEW_RENDER = "advanced"
+npm run dev
+# or one-off: http://127.0.0.1:5173/?invoiceId=...&session=...&apiBase=...&reviewRender=advanced
+```
+
+**Playwright (deployed dev):**
+
+| Script | Purpose |
+| ------ | ------- |
+| `npm run test:e2e:real:advanced-preview:dev` | Upload sample invoice → Textract → advanced review UI |
+| `npm run test:e2e:advanced-preview:review-only:dev` | Skip upload; set `PLAYWRIGHT_REVIEW_INVOICE_ID` and `PLAYWRIGHT_REVIEW_SESSION_ID` |
+| `npm run test:e2e:real:simple-preview:dev` | Same flow for **simple** (JSON) mode |
+
+Requires `AWS_PROFILE` (e.g. `my-dev`). See [`e2e/helpers/review-spa-url.ts`](./e2e/helpers/review-spa-url.ts) for URL construction in tests.
 
 ### Local SPA — choose backend
 

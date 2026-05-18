@@ -5,9 +5,10 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { ddbSend, sfnSend } = vi.hoisted(() => ({
+const { ddbSend, sfnSend, s3Send } = vi.hoisted(() => ({
   ddbSend: vi.fn(),
   sfnSend: vi.fn(),
+  s3Send: vi.fn(),
 }));
 
 vi.mock("@aws-sdk/client-dynamodb", () => ({
@@ -29,12 +30,10 @@ vi.mock("@aws-sdk/client-sfn", () => ({
 }));
 
 vi.mock("@aws-sdk/client-s3", () => ({
-  S3Client: class MockS3 {},
+  S3Client: class MockS3 {
+    send = s3Send;
+  },
   GetObjectCommand: vi.fn((input: unknown) => input),
-}));
-
-vi.mock("@aws-sdk/s3-request-presigner", () => ({
-  getSignedUrl: vi.fn(async () => "https://example.com/presigned-doc"),
 }));
 
 import { handler } from "../../lambda/public-api/index";
@@ -68,6 +67,14 @@ function mkGetEvent(invoiceId: string, session: string): APIGatewayProxyEventV2 
     isBase64Encoded: false,
     headers: {},
   } as APIGatewayProxyEventV2;
+}
+
+function mkDocumentGetEvent(invoiceId: string, session: string): APIGatewayProxyEventV2 {
+  const base = mkGetEvent(invoiceId, session);
+  return {
+    ...base,
+    queryStringParameters: { session, document: "1" },
+  };
 }
 
 function mkPostDecisionEvent(body: Record<string, unknown>): APIGatewayProxyEventV2 {
@@ -105,7 +112,9 @@ describe("public-api handler", () => {
   beforeEach(() => {
     ddbSend.mockReset();
     sfnSend.mockReset();
+    s3Send.mockReset();
     process.env.INVOICES_TABLE_NAME = "invoice-records-test";
+    process.env.PUBLIC_API_BASE_URL = "https://api.example.test";
   });
 
   it("GET returns invoice payload and manualVerificationRequired for SPA", async () => {
@@ -129,8 +138,32 @@ describe("public-api handler", () => {
     expect(body.manualVerificationRequired).toBe(true);
     expect(body.minConfidence).toBe(88);
     expect(body.status).toBe("AWAITING_HUMAN");
-    expect(body.documentUrl).toBe("https://example.com/presigned-doc");
+    expect(body.documentUrl).toBe(
+      "https://api.example.test/public/invoice/inv-1?session=sess-abc&document=1",
+    );
     expect(body.documentContentType).toBe("image/png");
+  });
+
+  it("GET document streams invoice bytes from S3", async () => {
+    ddbSend.mockResolvedValueOnce({
+      Item: {
+        invoiceId: "inv-1",
+        reviewSessionId: "sess-abc",
+        status: "AWAITING_HUMAN",
+        bucket: "bkt",
+        objectKey: "uploads/dev/u1/inv.png",
+      },
+    });
+    s3Send.mockResolvedValueOnce({
+      Body: { transformToByteArray: async () => Uint8Array.from([0x89, 0x50, 0x4e, 0x47]) },
+      ContentType: "image/png",
+    });
+
+    const res = await handler(mkDocumentGetEvent("inv-1", "sess-abc"));
+    expect(res.statusCode).toBe(200);
+    expect(res.isBase64Encoded).toBe(true);
+    expect(res.headers?.["content-type"]).toBe("image/png");
+    expect(s3Send).toHaveBeenCalledTimes(1);
   });
 
   it("GET returns 403 when session does not match", async () => {

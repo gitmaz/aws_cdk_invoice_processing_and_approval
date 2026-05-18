@@ -41,6 +41,14 @@ export class InvoiceProcessingStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: stage === "prod" ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: stage !== "prod",
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          allowedOrigins: ["*"],
+          allowedHeaders: ["*"],
+          maxAge: 3600,
+        },
+      ],
     });
 
     const ingestionDlq = new sqs.Queue(this, "IngestionDlq", {
@@ -331,6 +339,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
       const publicRes = restApi.root.addResource("public");
       const invoiceRes = publicRes.addResource("invoice").addResource("{invoiceId}");
       invoiceRes.addMethod("GET", new apigw.LambdaIntegration(publicApiFn));
+      invoiceRes.addResource("document").addMethod("GET", new apigw.LambdaIntegration(publicApiFn));
 
       const decisionRes = publicRes.addResource("decision");
       decisionRes.addMethod("POST", new apigw.LambdaIntegration(publicApiFn));
@@ -364,6 +373,12 @@ export class InvoiceProcessingStack extends cdk.Stack {
       });
 
       httpApi.addRoutes({
+        path: "/public/invoice/{invoiceId}/document",
+        methods: [apigwv2.HttpMethod.GET],
+        integration: new apigwIntegrations.HttpLambdaIntegration("GetInvoiceDocument", publicApiFn),
+      });
+
+      httpApi.addRoutes({
         path: "/public/decision",
         methods: [apigwv2.HttpMethod.POST],
         integration: new apigwIntegrations.HttpLambdaIntegration("PostDecision", publicApiFn),
@@ -381,6 +396,8 @@ export class InvoiceProcessingStack extends cdk.Stack {
     }
 
     const apiBase = apiUrlOutput.replace(/\/+$/, "");
+    publicApiFn.addEnvironment("PUBLIC_API_BASE_URL", apiBase);
+
     new SwaggerDocsConstruct(this, "SwaggerDocs", {
       stage,
       apiPublicBaseUrl: apiBase,

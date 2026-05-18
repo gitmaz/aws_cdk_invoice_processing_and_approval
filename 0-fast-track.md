@@ -162,3 +162,14 @@ https://4zpmth3ymohrjhvv2rkka7kriq0qdiol.lambda-url.ap-southeast-2.on.aws/
 api presign base url:
 
 https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com
+
+@@advanced vs simple rendering of review page:
+
+Mode switch
+Build env: VITE_REVIEW_RENDER=simple (default) or advanced in spa/.env.dev
+Runtime override: ?reviewRender=advanced on the review URL (no rebuild)
+Logic: getReviewRenderMode() in spa/src/config.ts
+
+@playwright for review advanced page (image with overlay)
+npm run test:e2e:real:advanced-preview:dev (:headed)
+npm run test:e2e:real:simple-preview:dev

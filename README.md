@@ -84,6 +84,25 @@ install Node **22.x** (or newer) from nodejs.org (or use nvm-windows) and remove
 
 ---
 
+## Review UI: simple vs advanced
+
+The approval SPA supports two review layouts (see **[README-dev.md — Review UI](./README-dev.md#review-ui-simple-vs-advanced)**):
+
+| Mode | What you see |
+| ---- | ------------ |
+| **`simple`** (default) | OCR JSON in a textarea; Approve / Reject |
+| **`advanced`** | Invoice image with Textract field overlays; **Ctrl+click** hides a field to read the scan |
+
+**Switch to advanced** (pick one):
+
+1. **Review link query** (no rebuild): add `&reviewRender=advanced` to the URL from the email, with `invoiceId`, `session`, and `apiBase` already present.  
+   Example: `https://<spa>/?invoiceId=...&session=...&apiBase=https://<http-api>&reviewRender=advanced`
+2. **Build-time default**: set `VITE_REVIEW_RENDER=advanced` in [`spa/.env.dev`](./spa/.env.dev) (see [`spa/.env.example`](./spa/.env.example)), then `npm run spa:build:dev` and redeploy if you use **`SPA_HOSTING=lambda`**.
+
+**Dev E2E (advanced preview):** `npm run test:e2e:real:advanced-preview:dev` (full upload + review) or `npm run test:e2e:advanced-preview:review-only:dev` with `PLAYWRIGHT_REVIEW_INVOICE_ID` + `PLAYWRIGHT_REVIEW_SESSION_ID` set after a successful run.
+
+---
+
 For architecture, security model, Step Functions behaviour, and navigable links into source files, see **[README-dev.md](./README-dev.md)**.
 
 **Local testing (mock API + Vitest, no AWS):** **[README-test.md](./README-test.md)**.

@@ -17,9 +17,14 @@ export default function ReviewPageAdvanced({ invoiceId, review }: Props) {
   const [fields, setFields] = useState<OverlayField[]>([]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [layout, setLayout] = useState({ width: 0, height: 0 });
+  const [imageError, setImageError] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const documentUrl = data?.documentUrl;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [documentUrl]);
   const isPdf =
     data?.documentContentType?.includes("pdf") || (documentUrl?.toLowerCase().includes(".pdf") ?? false);
 
@@ -154,6 +159,10 @@ export default function ReviewPageAdvanced({ invoiceId, review }: Props) {
                 image for overlay review.
               </p>
             </>
+          ) : imageError ? (
+            <p style={{ padding: 16, color: "crimson", margin: 0 }}>
+              Could not load the invoice image. Re-deploy the API (document proxy) or open the review link again.
+            </p>
           ) : (
             <img
               src={documentUrl}
@@ -161,6 +170,7 @@ export default function ReviewPageAdvanced({ invoiceId, review }: Props) {
               data-testid="review-invoice-image"
               style={{ display: "block", width: "100%", height: "auto" }}
               onLoad={measure}
+              onError={() => setImageError(true)}
             />
           )}
 

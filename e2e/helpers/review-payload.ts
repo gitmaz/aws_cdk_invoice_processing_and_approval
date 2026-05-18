@@ -53,7 +53,7 @@ export function assertReviewReadyForSimplePreview(payload: ReviewInvoicePayload)
 export function assertReviewReadyForAdvancedPreview(payload: ReviewInvoicePayload): void {
   if (!payload.documentUrl) {
     throw new Error(
-      "Review API returned no documentUrl (presigned S3 GET). Re-deploy public-api + stack S3 read grant.",
+      "Review API returned no documentUrl. Re-deploy stack (public-api document proxy + PUBLIC_API_BASE_URL).",
     );
   }
   const overlayCount = countPositionedOverlayFields(payload.ocrSummary);
