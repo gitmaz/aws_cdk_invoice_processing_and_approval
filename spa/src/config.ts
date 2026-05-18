@@ -1,7 +1,10 @@
+import type { ReviewRenderMode } from "./review/types";
+
 /** HTTP API base (no trailing slash). Query `apiBase` overrides build-time env. */
 export function getApiBase(): string {
   const fromQuery = new URLSearchParams(window.location.search).get("apiBase");
-  const base = (import.meta.env.VITE_API_BASE_URL || fromQuery || "").replace(/\/$/, "");
+  /** Query wins so email/review links can target the correct stage without rebuilding the SPA. */
+  const base = (fromQuery || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
   return base;
 }
 
@@ -30,4 +33,17 @@ export function getStoredIdToken(): string | null {
 export function setStoredIdToken(token: string | null): void {
   if (token) sessionStorage.setItem(TOKEN_KEY, token);
   else sessionStorage.removeItem(TOKEN_KEY);
+}
+
+/**
+ * Review UI layout. Default `simple` (JSON textarea).
+ * Build: VITE_REVIEW_RENDER=simple|advanced. Runtime override: ?reviewRender=advanced
+ */
+export function getReviewRenderMode(): ReviewRenderMode {
+  const fromQuery = new URLSearchParams(window.location.search).get("reviewRender")?.trim().toLowerCase();
+  const fromEnv = String(import.meta.env.VITE_REVIEW_RENDER ?? "simple")
+    .trim()
+    .toLowerCase();
+  const mode = fromQuery || fromEnv;
+  return mode === "advanced" ? "advanced" : "simple";
 }

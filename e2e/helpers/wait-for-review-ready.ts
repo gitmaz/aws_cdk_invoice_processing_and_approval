@@ -24,6 +24,8 @@ export async function waitForAwaitingHumanReview(params: {
   } = params;
   const deadline = Date.now() + timeoutMs;
   const skewMs = 60_000;
+  const started = Date.now();
+  let lastLogMs = 0;
 
   while (Date.now() < deadline) {
     const res = await dynamoDocClient().send(
@@ -50,6 +52,14 @@ export async function waitForAwaitingHumanReview(params: {
         invoiceId: String(top.invoiceId),
         reviewSessionId: String(top.reviewSessionId),
       };
+    }
+
+    const elapsed = Date.now() - started;
+    if (elapsed - lastLogMs >= 10_000) {
+      lastLogMs = elapsed;
+      console.log(
+        `[e2e] Waiting for AWAITING_HUMAN on ${tableName} (${stageHint}) — ${Math.round(elapsed / 1000)}s / ${Math.round(timeoutMs / 1000)}s`,
+      );
     }
 
     await new Promise((r) => setTimeout(r, pollMs));

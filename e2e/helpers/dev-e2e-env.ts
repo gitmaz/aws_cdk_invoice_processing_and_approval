@@ -1,4 +1,5 @@
 import { awsEndpoint } from "./aws-clients";
+import type { ReviewKeys } from "./wait-for-review-ready";
 
 export const devE2eEnv = {
   apiBaseUrl: process.env.PLAYWRIGHT_API_BASE_URL ?? "",
@@ -26,4 +27,12 @@ export function devE2eSkipReason(): string {
 
 export function hasDevE2eEnv(): boolean {
   return Boolean(devE2eEnv.apiBaseUrl && devE2eEnv.poolId && devE2eEnv.clientId && !awsEndpoint());
+}
+
+/** Skip upload/Textract when re-testing review UI (seconds instead of minutes). */
+export function devReviewOnlyKeys(): ReviewKeys | null {
+  const invoiceId = process.env.PLAYWRIGHT_REVIEW_INVOICE_ID?.trim();
+  const reviewSessionId = process.env.PLAYWRIGHT_REVIEW_SESSION_ID?.trim();
+  if (!invoiceId || !reviewSessionId) return null;
+  return { invoiceId, reviewSessionId };
 }

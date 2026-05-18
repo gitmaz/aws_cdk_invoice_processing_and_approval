@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_PRESIGN_LOCAL_SECRET: string;
   readonly VITE_APP_STAGE: string;
   readonly VITE_AWS_REGION: string;
+  /** Review UI: `simple` (default) | `advanced` (document overlay) */
+  readonly VITE_REVIEW_RENDER: string;
 }
 
 interface ImportMeta {

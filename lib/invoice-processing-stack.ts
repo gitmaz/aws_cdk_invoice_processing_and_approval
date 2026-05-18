@@ -255,6 +255,7 @@ export class InvoiceProcessingStack extends cdk.Stack {
     });
 
     invoicesTable.grantReadData(publicApiFn);
+    invoicesBucket.grantRead(publicApiFn);
     publicApiFn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["states:SendTaskSuccess", "states:SendTaskFailure"],

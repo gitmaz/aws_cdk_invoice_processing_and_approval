@@ -28,6 +28,15 @@ vi.mock("@aws-sdk/client-sfn", () => ({
   SendTaskSuccessCommand: vi.fn((input: unknown) => input),
 }));
 
+vi.mock("@aws-sdk/client-s3", () => ({
+  S3Client: class MockS3 {},
+  GetObjectCommand: vi.fn((input: unknown) => input),
+}));
+
+vi.mock("@aws-sdk/s3-request-presigner", () => ({
+  getSignedUrl: vi.fn(async () => "https://example.com/presigned-doc"),
+}));
+
 import { handler } from "../../lambda/public-api/index";
 
 function mkGetEvent(invoiceId: string, session: string): APIGatewayProxyEventV2 {
@@ -108,6 +117,8 @@ describe("public-api handler", () => {
         minConfidence: 88,
         manualVerificationRequired: true,
         ocrSummary: JSON.stringify({ expenseDocuments: [] }),
+        bucket: "bkt",
+        objectKey: "uploads/dev/u1/inv.png",
       },
     });
 
@@ -118,6 +129,8 @@ describe("public-api handler", () => {
     expect(body.manualVerificationRequired).toBe(true);
     expect(body.minConfidence).toBe(88);
     expect(body.status).toBe("AWAITING_HUMAN");
+    expect(body.documentUrl).toBe("https://example.com/presigned-doc");
+    expect(body.documentContentType).toBe("image/png");
   });
 
   it("GET returns 403 when session does not match", async () => {

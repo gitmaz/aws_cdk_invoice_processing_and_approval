@@ -1,10 +1,30 @@
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { SFNClient, SendTaskSuccessCommand } from "@aws-sdk/client-sfn";
 import type { APIGatewayProxyResultV2 } from "aws-lambda";
 
 const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const sfn = new SFNClient({});
+const s3 = new S3Client({});
+
+async function presignedDocumentUrl(bucket: string, key: string): Promise<string | undefined> {
+  if (!bucket || !key) return undefined;
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+    { expiresIn: 900 },
+  );
+}
+
+function contentTypeFromKey(key: string): string {
+  const lower = key.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  return "application/octet-stream";
+}
 
 const json = (statusCode: number, body: unknown): APIGatewayProxyResultV2 => ({
   statusCode,
@@ -39,6 +59,10 @@ export const handler = async (event: any): Promise<APIGatewayProxyResultV2> => {
       ocr = item.ocrSummary;
     }
 
+    const bucket = String(item.bucket ?? "");
+    const objectKey = String(item.objectKey ?? "");
+    const documentUrl = await presignedDocumentUrl(bucket, objectKey);
+
     return json(200, {
       invoiceId,
       minConfidence: item.minConfidence,
@@ -46,6 +70,8 @@ export const handler = async (event: any): Promise<APIGatewayProxyResultV2> => {
       /** false = high OCR confidence: show approval-only UI; true = require manual field verification before approve. */
       manualVerificationRequired: item.manualVerificationRequired === true,
       ocrSummary: ocr,
+      documentUrl,
+      documentContentType: objectKey ? contentTypeFromKey(objectKey) : undefined,
     });
   }
 

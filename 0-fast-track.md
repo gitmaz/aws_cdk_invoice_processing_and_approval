@@ -154,3 +154,11 @@ Lambda Function URL (same UI handler)
 https://ip3mfijdif7uh7appvtpxcvuve0xmqnt.lambda-url.ap-southeast-2.on.aws/
 
 API base (HttpApiUrl): https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com
+
+
+@@current upload page
+https://4zpmth3ymohrjhvv2rkka7kriq0qdiol.lambda-url.ap-southeast-2.on.aws/
+
+api presign base url:
+
+https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com
