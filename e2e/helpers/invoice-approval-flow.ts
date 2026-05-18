@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
+import { runInvoiceUploadE2e } from "./invoice-upload-flow";
 import { mailhogMessagesIncludeInvoice } from "./mailhog";
-import { waitForAwaitingHumanReview } from "./wait-for-review-ready";
 
 export async function approveInvoiceInSpa(params: {
   page: Page;
@@ -36,15 +36,11 @@ export async function runInvoiceApprovalE2e(params: {
   mailhogUrl?: string;
   upload: () => Promise<void>;
 }): Promise<void> {
-  const notBefore = Date.now();
-
-  await params.upload();
-
-  const { invoiceId, reviewSessionId } = await waitForAwaitingHumanReview({
-    tableName: params.invoicesTable,
-    notBeforeMs: notBefore,
-    timeoutMs: params.reviewTimeoutMs,
+  const { invoiceId, reviewSessionId } = await runInvoiceUploadE2e({
+    invoicesTable: params.invoicesTable,
     stageHint: params.stageHint,
+    reviewTimeoutMs: params.reviewTimeoutMs,
+    upload: params.upload,
   });
 
   if (params.mailhogUrl) {
