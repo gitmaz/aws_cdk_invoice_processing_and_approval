@@ -1,0 +1,177 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Invoice processing API",
+    "description": "Public review routes, Cognito-authenticated upload presign, and optional local upload complete.",
+    "version": "1.0.0"
+  },
+  "servers": [{ "url": "/" }],
+  "tags": [
+    { "name": "public", "description": "Human review (session in query/body)" },
+    { "name": "upload", "description": "Authenticated uploads" }
+  ],
+  "paths": {
+    "/public/invoice/{invoiceId}": {
+      "get": {
+        "tags": ["public"],
+        "summary": "Get invoice awaiting human review",
+        "operationId": "getPublicInvoice",
+        "parameters": [
+          { "name": "invoiceId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "session", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice review payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/InvoiceReviewResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/public/decision": {
+      "post": {
+        "tags": ["public"],
+        "summary": "Submit approve or reject decision",
+        "operationId": "postPublicDecision",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DecisionRequest" },
+              "examples": {
+                "approve": {
+                  "value": {
+                    "invoiceId": "inv-123",
+                    "session": "review-session-uuid",
+                    "action": "APPROVE",
+                    "editedFields": {}
+                  }
+                },
+                "reject": {
+                  "value": {
+                    "invoiceId": "inv-123",
+                    "session": "review-session-uuid",
+                    "action": "REJECT",
+                    "reason": "Amount mismatch"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task token sent to Step Functions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean" } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/upload/presign": {
+      "post": {
+        "tags": ["upload"],
+        "summary": "Presigned S3 PUT for invoice upload",
+        "description": "Requires `Authorization: Bearer <Cognito JWT>` on AWS dev/test/prod.",
+        "operationId": "postUploadPresign",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contentType": { "type": "string", "example": "application/pdf" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Presigned URLs",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PresignResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "InvoiceReviewResponse": {
+        "type": "object",
+        "properties": {
+          "invoiceId": { "type": "string" },
+          "minConfidence": { "type": "number" },
+          "status": { "type": "string" },
+          "manualVerificationRequired": { "type": "boolean" },
+          "ocrSummary": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "DecisionRequest": {
+        "type": "object",
+        "required": ["invoiceId", "session", "action"],
+        "properties": {
+          "invoiceId": { "type": "string" },
+          "session": { "type": "string" },
+          "action": { "type": "string", "enum": ["APPROVE", "REJECT"] },
+          "editedFields": { "type": "object", "additionalProperties": true },
+          "reason": { "type": "string" }
+        }
+      },
+      "PresignResponse": {
+        "type": "object",
+        "properties": {
+          "uploadUrl": { "type": "string" },
+          "objectKey": { "type": "string" },
+          "bucket": { "type": "string" },
+          "headUrl": { "type": "string" }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorBody" }
+          }
+        }
+      }
+    }
+  }
+}

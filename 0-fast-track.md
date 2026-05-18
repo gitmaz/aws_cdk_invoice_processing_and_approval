@@ -125,3 +125,32 @@ Set-Location "c:\worklab\wp\maz1stwp\maz\aws\serverless\aws_cdk_invoice_processi
 @@tear down after experimenting:
 
 cdk destroy --all -c stage=dev --profile my-dev
+
+
+
+@@sample deploy to dev:
+cd "c:\worklab\wp\maz1stwp\maz\aws\serverless\aws_cdk_invoice_processing_and_approval"; $env:AWS_PROFILE = "my-dev"; $env:CDK_DEFAULT_ACCOUNT = "154501673607"; $env:CDK_DEFAULT_REGION = "ap-southeast-2"; npm run deploy:dev -- --require-approval never
+
+@@run e2e dev test:
+cd maz\aws\serverless\aws_cdk_invoice_processing_and_approval
+$env:AWS_PROFILE = "my-dev"
+$env:AWS_REGION = "ap-southeast-2"
+npm run test:e2e:dev
+
+@@run e2e test focus on one test only
+
+npm run test:e2e:dev -- -- e2e/invoice-upload-dev.spec.ts
+
+@@for real invoice example file (npm run generate:e2e-sample-invoice) fixture upload (the other is using one pixel png as invoice), use this command:
+npm run test:e2e:real:dev
+
+@@Swagger UI (use this)
+https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com/docs
+
+@@OpenAPI spec
+https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com/openapi.json
+
+Lambda Function URL (same UI handler)
+https://ip3mfijdif7uh7appvtpxcvuve0xmqnt.lambda-url.ap-southeast-2.on.aws/
+
+API base (HttpApiUrl): https://i6ppexbkw3.execute-api.ap-southeast-2.amazonaws.com

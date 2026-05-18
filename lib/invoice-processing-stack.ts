@@ -20,6 +20,7 @@ import { Construct } from "constructs";
 import * as path from "path";
 import { resolveSpaHosting } from "./resolve-spa-hosting";
 import { SpaHostingConstruct } from "./spa-hosting-construct";
+import { SwaggerDocsConstruct } from "./swagger-docs-construct";
 import { projectRoot, type StageConfig } from "./stage-config";
 
 export interface InvoiceProcessingStackProps extends cdk.StackProps {
@@ -311,10 +312,12 @@ export class InvoiceProcessingStack extends cdk.Stack {
     stateMachine.grantStartExecution(uploadCompleteFn);
 
     let apiUrlOutput: string;
+    let restApi: apigw.RestApi | undefined;
+    let httpApi: apigwv2.HttpApi | undefined;
 
     if (stage === "local") {
       // LocalStack Community: apigatewayv2 (HTTP API) is not available. Use REST API (v1) for local only.
-      const restApi = new apigw.RestApi(this, "InvoiceRestApi", {
+      restApi = new apigw.RestApi(this, "InvoiceRestApi", {
         restApiName: `invoice-api-${stage}`,
         deployOptions: { stageName: stage },
         defaultCorsPreflightOptions: {
@@ -338,11 +341,9 @@ export class InvoiceProcessingStack extends cdk.Stack {
       const uploadCompleteRes = uploadRoot.addResource("complete");
       uploadCompleteRes.addMethod("POST", new apigw.LambdaIntegration(uploadCompleteFn));
 
-      // Prefer the API Gateway "execute-api" base URL which LocalStack serves reliably.
-      // (The legacy /restapis/{id}/... edge path is not consistently supported across LS versions.)
       apiUrlOutput = restApi.url;
     } else {
-      const httpApi = new apigwv2.HttpApi(this, "InvoiceHttpApi", {
+      httpApi = new apigwv2.HttpApi(this, "InvoiceHttpApi", {
         apiName: `invoice-api-${stage}`,
         corsPreflight: {
           allowHeaders: ["authorization", "content-type"],
@@ -377,6 +378,25 @@ export class InvoiceProcessingStack extends cdk.Stack {
 
       apiUrlOutput = httpApi.apiEndpoint;
     }
+
+    const apiBase = apiUrlOutput.replace(/\/+$/, "");
+    new SwaggerDocsConstruct(this, "SwaggerDocs", {
+      stage,
+      apiPublicBaseUrl: apiBase,
+      lambdaDefaults: {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 256,
+        tracing: lambda.Tracing.DISABLED,
+        bundling: {
+          minify: true,
+          sourceMap: true,
+          externalModules: ["@aws-sdk/*"],
+        },
+      },
+      restApi,
+      httpApi,
+    });
 
     new cdk.CfnOutput(this, "HttpApiUrl", { value: apiUrlOutput });
     new cdk.CfnOutput(this, "InvoicesBucketName", { value: invoicesBucket.bucketName });
