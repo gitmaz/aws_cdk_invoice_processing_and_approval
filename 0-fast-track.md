@@ -182,3 +182,59 @@ npm run deploy:dev -- --require-approval never
 
 or
 cdk deploy -c spaHosting=cloudfront
+
+
+@@if fe is changed: rebuild and redeploy to dev:
+cd "c:\worklab\wp\maz1stwp\maz\aws\serverless\aws_cdk_invoice_processing_and_approval"; $env:AWS_PROFILE = "my-dev"; $env:AWS_REGION = "ap-southeast-2"; $env:CDK_DEFAULT_ACCOUNT = "154501673607"; $env:CDK_DEFAULT_REGION = "ap-southeast-2"; Remove-Item Env:AWS_ENDPOINT_URL -ErrorAction SilentlyContinue; npm run spa:build:dev
+
+
+cd "c:\worklab\wp\maz1stwp\maz\aws\serverless\aws_cdk_invoice_processing_and_approval"; $env:AWS_PROFILE = "my-dev"; $env:AWS_REGION = "ap-southeast-2"; $env:CDK_DEFAULT_ACCOUNT = "154501673607"; $env:CDK_DEFAULT_REGION = "ap-southeast-2"; $env:SPA_HOSTING = "lambda"; Remove-Item Env:AWS_ENDPOINT_URL -ErrorAction SilentlyContinue; npm run deploy:dev -- --require-approval never
+
+access upload page again:
+ https://4zpmth3ymohrjhvv2rkka7kriq0qdiol.lambda-url.ap-southeast-2.on.aws/
+
+
+@@find user pool id
+aws cloudformation describe-stacks --stack-name InvoiceProcessing-dev `
+  --profile my-dev --region ap-southeast-2 `
+  --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolId'].OutputValue" --output text
+
+@@set a user password
+aws cognito-idp admin-set-user-password `
+  --user-pool-id "ap-southeast-2_xCUzgI64w" `
+  --username "mn.usyd@gmail.com" `
+  --password "Cognito123!!" `
+  --permanent `
+  --profile my-dev `
+  --region ap-southeast-2
+
+@@list users
+aws cognito-idp list-users --user-pool-id "ap-southeast-2_xCUzgI64w" `
+  --filter 'email = "mn.usyd@gmail.com"' `
+  --profile my-dev --region ap-southeast-2
+
+
+@@sample cors fix for s3 using aws cli
+ s3api put-bucket-cors --bucket invoiceprocessing-dev-invoicesbucket57fcb164-nzdl1u5i3doi --cors-configuration file://c:/worklab/wp/maz1stwp/maz/aws/serverless/aws_cdk_invoice_processing_and_approval/tmp/s3-cors-put.json --profile my-dev --region ap-southeast-2; aws s3api get-bucket-cors --bucket invoiceprocessing-dev-invoicesbucket57fcb164-nzdl1u5i3doi --profile my-dev --region ap-southeast-2
+{
+    "CORSRules": [
+        {
+            "AllowedHeaders": [
+                "*"
+            ],
+            "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "PUT",
+                "POST"
+            ],
+            "AllowedOrigins": [
+                "*"
+            ],
+            "ExposeHeaders": [
+                "ETag"
+            ],
+            "MaxAgeSeconds": 3600
+        }
+    ]
+}

@@ -43,9 +43,16 @@ export class InvoiceProcessingStack extends cdk.Stack {
       autoDeleteObjects: stage !== "prod",
       cors: [
         {
-          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          // Browser SPA PUTs to presigned uploadUrl (Lambda/CloudFront origin).
+          allowedMethods: [
+            s3.HttpMethods.GET,
+            s3.HttpMethods.HEAD,
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.POST,
+          ],
           allowedOrigins: ["*"],
           allowedHeaders: ["*"],
+          exposedHeaders: ["ETag"],
           maxAge: 3600,
         },
       ],

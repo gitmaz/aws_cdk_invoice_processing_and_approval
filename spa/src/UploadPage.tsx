@@ -22,13 +22,14 @@ import {
   SuccessBox,
 } from "./ui";
 
-type AuthMode = "signIn" | "signUp" | "confirm";
+type AuthForm = "signIn" | "signUp" | "confirm";
 
 export default function UploadPage() {
   const cognito = getCognitoConfig();
   const localMode = isLocalPresignMode();
   const [idToken, setIdToken] = useState<string | null>(() => getStoredIdToken());
-  const [authMode, setAuthMode] = useState<AuthMode>("signIn");
+  /** null = show Sign in / Sign up only; set when user picks a flow. */
+  const [authForm, setAuthForm] = useState<AuthForm | null>(null);
   const [email, setEmail] = useState(() => sessionStorage.getItem("invoice_spa_email") ?? "");
   const [password, setPassword] = useState("");
   const [confirmCode, setConfirmCode] = useState("");
@@ -48,7 +49,9 @@ export default function UploadPage() {
       const token = await signInWithPassword(trimmed, password);
       sessionStorage.setItem("invoice_spa_email", trimmed);
       setIdToken(token);
-      setSuccess("Signed in. You can upload an invoice below.");
+      setAuthForm(null);
+      setPassword("");
+      setSuccess("Signed in. Choose a file below to upload.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -62,7 +65,7 @@ export default function UploadPage() {
     setBusy(true);
     try {
       await signUp(email.trim(), password);
-      setAuthMode("confirm");
+      setAuthForm("confirm");
       setSuccess("Account created. Enter the verification code from email (if required), then sign in.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -77,7 +80,7 @@ export default function UploadPage() {
     setBusy(true);
     try {
       await confirmSignUp(email.trim(), confirmCode.trim());
-      setAuthMode("signIn");
+      setAuthForm("signIn");
       setSuccess("Email confirmed. Sign in to upload.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -90,8 +93,24 @@ export default function UploadPage() {
     signOut();
     sessionStorage.removeItem("invoice_spa_email");
     setIdToken(null);
+    setAuthForm(null);
+    setPassword("");
+    setConfirmCode("");
     setSuccess(null);
     setError(null);
+  }
+
+  function openAuthForm(form: AuthForm) {
+    setAuthForm(form);
+    setError(null);
+    setSuccess(null);
+  }
+
+  function backToAuthChoice() {
+    setAuthForm(null);
+    setError(null);
+    setPassword("");
+    setConfirmCode("");
   }
 
   async function handleUpload(e: React.FormEvent) {
@@ -121,8 +140,9 @@ export default function UploadPage() {
     <div style={shell}>
       <h1>Upload invoice</h1>
       <p style={{ color: "#555" }}>
-        Sign in with Cognito, then upload a PDF or image. Review and approval use the link in your email (no login on
-        that page).
+        {canUpload
+          ? "Upload a PDF or image below. Review and approval use the link in your email (no login on that page)."
+          : "Sign in or create an account, then upload a PDF or image. Review and approval use the link in your email (no login on that page)."}
       </p>
       {!getApiBase() && (
         <ErrorAlert>Set VITE_API_BASE_URL at build time or add ?apiBase=https://your-http-api to the URL.</ErrorAlert>
@@ -144,37 +164,26 @@ export default function UploadPage() {
       {error && <ErrorAlert>{error}</ErrorAlert>}
       {success && <SuccessBox>{success}</SuccessBox>}
 
-      {!localMode && cognito && (
+      {!localMode && cognito && !idToken && (
         <div style={card}>
-          {idToken ? (
-            <>
-              <p>
-                Signed in as <strong>{email || "Cognito user"}</strong>
-              </p>
-              <button type="button" style={btnSecondary} onClick={handleSignOut}>
-                Sign out
+          {authForm === null ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" style={btnPrimary} onClick={() => openAuthForm("signIn")}>
+                Sign in
               </button>
-            </>
+              <button type="button" style={btnSecondary} onClick={() => openAuthForm("signUp")}>
+                Sign up
+              </button>
+            </div>
           ) : (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <button
-                  type="button"
-                  style={authMode === "signIn" ? btnPrimary : btnSecondary}
-                  onClick={() => setAuthMode("signIn")}
-                >
-                  Sign in
+              {authForm !== "confirm" && (
+                <button type="button" style={{ ...btnSecondary, marginBottom: 12 }} onClick={backToAuthChoice}>
+                  ← Back
                 </button>
-                <button
-                  type="button"
-                  style={authMode === "signUp" ? btnPrimary : btnSecondary}
-                  onClick={() => setAuthMode("signUp")}
-                >
-                  Sign up
-                </button>
-              </div>
+              )}
 
-              {authMode === "signIn" && (
+              {authForm === "signIn" && (
                 <form onSubmit={(e) => void handleSignIn(e)}>
                   <label>
                     Email
@@ -204,7 +213,7 @@ export default function UploadPage() {
                 </form>
               )}
 
-              {authMode === "signUp" && (
+              {authForm === "signUp" && (
                 <form onSubmit={(e) => void handleSignUp(e)}>
                   <label>
                     Email
@@ -235,7 +244,7 @@ export default function UploadPage() {
                 </form>
               )}
 
-              {authMode === "confirm" && (
+              {authForm === "confirm" && (
                 <form onSubmit={(e) => void handleConfirm(e)}>
                   <label>
                     Verification code
@@ -250,6 +259,13 @@ export default function UploadPage() {
                   <button type="submit" style={btnPrimary} disabled={busy}>
                     Confirm email
                   </button>
+                  <button
+                    type="button"
+                    style={{ ...btnSecondary, marginLeft: 8 }}
+                    onClick={() => openAuthForm("signIn")}
+                  >
+                    Sign in instead
+                  </button>
                 </form>
               )}
             </>
@@ -257,20 +273,33 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>File</h2>
-        <form onSubmit={(e) => void handleUpload(e)}>
-          <input
-            type="file"
-            accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          <p style={{ fontSize: 14, color: "#666" }}>PDF, PNG, or JPEG. Max size depends on API/S3 limits.</p>
-          <button type="submit" style={{ ...btnPrimary, marginTop: 12 }} disabled={busy || !canUpload || !file}>
-            {busy ? "Uploading…" : "Upload invoice"}
+      {!localMode && cognito && idToken && (
+        <div style={card}>
+          <p>
+            Signed in as <strong>{email || "Cognito user"}</strong>
+          </p>
+          <button type="button" style={btnSecondary} onClick={handleSignOut}>
+            Sign out
           </button>
-        </form>
-      </div>
+        </div>
+      )}
+
+      {canUpload && (
+        <div style={card}>
+          <h2 style={{ marginTop: 0 }}>File</h2>
+          <form onSubmit={(e) => void handleUpload(e)}>
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            <p style={{ fontSize: 14, color: "#666" }}>PDF, PNG, or JPEG. Max size depends on API/S3 limits.</p>
+            <button type="submit" style={{ ...btnPrimary, marginTop: 12 }} disabled={busy || !file}>
+              {busy ? "Uploading…" : "Upload invoice"}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
