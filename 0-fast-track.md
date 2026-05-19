@@ -173,3 +173,12 @@ Logic: getReviewRenderMode() in spa/src/config.ts
 @playwright for review advanced page (image with overlay)
 npm run test:e2e:real:advanced-preview:dev (:headed)
 npm run test:e2e:real:simple-preview:dev
+
+@@sample spa hosting with cloudfront
+npm run spa:build:dev
+$env:SPA_HOSTING = "cloudfront"
+npm run deploy:dev -- --require-approval never
+# Use SpaCloudFrontUrl output for review links
+
+or
+cdk deploy -c spaHosting=cloudfront

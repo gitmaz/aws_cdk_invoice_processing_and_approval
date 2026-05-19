@@ -1,4 +1,6 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack } from "aws-cdk-lib";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -18,6 +20,7 @@ export interface SpaHostingConstructProps {
  * Publishes the Vite approval SPA from **`spa/dist`** (built on the host before synth/deploy).
  *
  * - **`lambda`**: Lambda + function URL serves `spa/dist` (SPA fallback to `index.html`).
+ * - **`cloudfront`**: Private S3 + CloudFront distribution (OAC, SPA error routes to `index.html`).
  * - **`ec2`**: S3 bucket + deployment for sync to nginx on EC2.
  *
  * Env: **`SPA_HOSTING`**, **`SPA_EC2_*`** — see README-dev.md. Synth fails if `spa/dist` is missing.
@@ -26,13 +29,22 @@ export class SpaHostingConstruct extends Construct {
   /** Set when `mode === "lambda"` (no trailing slash). */
   readonly lambdaFunctionUrl?: string;
 
+  /** Set when `mode === "cloudfront"` (no trailing slash). */
+  readonly cloudFrontUrl?: string;
+
   constructor(scope: Construct, id: string, props: SpaHostingConstructProps) {
     super(scope, id);
     const { stage, mode } = props;
     const stack = Stack.of(this);
     const root = projectRoot();
-    const bundleTarget = mode === "ec2" ? "s3" : "lambda";
+    const bundleTarget = mode === "lambda" ? "lambda" : "s3";
     const assetBundling = spaAssetBundling(root, bundleTarget, stage);
+
+    if (mode === "cloudfront" && stage === "local") {
+      throw new Error(
+        "SPA_HOSTING=cloudfront is not supported for stage=local (LocalStack). Use lambda or none.",
+      );
+    }
 
     if (mode === "lambda") {
       const fn = new lambda.Function(this, "SpaStaticFn", {
@@ -60,6 +72,68 @@ export class SpaHostingConstruct extends Construct {
         value: fnUrl.url,
         description:
           "Review SPA (Lambda function URL). Set spaBaseUrl to this for emails, or rely on auto wiring when SPA_HOSTING=lambda.",
+      });
+    } else if (mode === "cloudfront") {
+      const bucket = new s3.Bucket(this, "SpaCloudFrontOrigin", {
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        autoDeleteObjects: stage !== "prod",
+        removalPolicy: stage === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+        enforceSSL: true,
+      });
+
+      const priceClass =
+        stage === "prod" ? cloudfront.PriceClass.PRICE_CLASS_ALL : cloudfront.PriceClass.PRICE_CLASS_100;
+
+      const distribution = new cloudfront.Distribution(this, "SpaDistribution", {
+        comment: `Invoice approval SPA (${stage})`,
+        defaultRootObject: "index.html",
+        priceClass,
+        defaultBehavior: {
+          origin: origins.S3BucketOrigin.withOriginAccessControl(bucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          compress: true,
+        },
+        errorResponses: [
+          {
+            httpStatus: 403,
+            responseHttpStatus: 200,
+            responsePagePath: "/index.html",
+            ttl: Duration.minutes(5),
+          },
+          {
+            httpStatus: 404,
+            responseHttpStatus: 200,
+            responsePagePath: "/index.html",
+            ttl: Duration.minutes(5),
+          },
+        ],
+      });
+
+      new s3deploy.BucketDeployment(this, "SpaCloudFrontDeploy", {
+        sources: [s3deploy.Source.asset(root, { bundling: assetBundling })],
+        destinationBucket: bucket,
+        distribution,
+        distributionPaths: ["/*"],
+        memoryLimit: 4096,
+      });
+
+      this.cloudFrontUrl = `https://${distribution.distributionDomainName}`;
+
+      new CfnOutput(stack, "SpaCloudFrontUrl", {
+        value: this.cloudFrontUrl,
+        description:
+          "Review SPA (CloudFront). Used for review emails when SPA_HOSTING=cloudfront. Invalidate via deployment on each publish.",
+      });
+      new CfnOutput(stack, "SpaCloudFrontDistributionId", {
+        value: distribution.distributionId,
+        description: "CloudFront distribution ID for the approval SPA.",
+      });
+      new CfnOutput(stack, "SpaCloudFrontOriginBucket", {
+        value: bucket.bucketName,
+        description: "Private S3 bucket behind the SPA CloudFront distribution (OAC).",
       });
     } else if (mode === "ec2") {
       const prefix = process.env.SPA_EC2_KEY_PREFIX?.trim() || `spa/${stage}`;

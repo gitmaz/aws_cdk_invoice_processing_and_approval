@@ -267,7 +267,8 @@ npm run dev
 | Mode | How | Review email links (`SPA_BASE_URL`) |
 | ---- | --- | ------------------------------------- |
 | **`lambda`** (default) | Lambda **function URL** serves built `spa/dist` | Auto: **`SpaLambdaFunctionUrl`** output (overrides config for notify Lambda) |
-| **`none`** | Manual: Vite dev, your own host, or later S3+CloudFront | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
+| **`cloudfront`** | Private **S3** origin + **CloudFront** (OAC); `BucketDeployment` invalidates on publish | Auto: **`SpaCloudFrontUrl`** output |
+| **`none`** | Manual: Vite dev or your own host | **`spaBaseUrl`** in `cdk.json` / `config/<stage>.json` |
 | **`ec2`** | S3 artifact bucket + sync to nginx | **`spaBaseUrl`** must be your public nginx URL |
 
 Set via environment (wins) or CDK context in [`cdk.json`](./cdk.json) (`spaHosting`):
@@ -283,6 +284,12 @@ npm run spa:build:dev
 $env:SPA_HOSTING = "lambda"
 npm run deploy:dev -- --require-approval never
 # Open SpaLambdaFunctionUrl; API calls use VITE_API_BASE_URL baked at build time.
+
+# CloudFront + S3 (AWS stages only — not LocalStack)
+npm run spa:build:dev
+$env:SPA_HOSTING = "cloudfront"
+npm run deploy:dev -- --require-approval never
+# Open SpaCloudFrontUrl; bake VITE_API_BASE_URL at build time (same as lambda).
 ```
 
 | Build script | Env file |
@@ -293,7 +300,7 @@ npm run deploy:dev -- --require-approval never
 
 Implementation: [`lib/resolve-spa-hosting.ts`](./lib/resolve-spa-hosting.ts), [`lib/spa-hosting-construct.ts`](./lib/spa-hosting-construct.ts), [`lib/spa-local-bundle.ts`](./lib/spa-local-bundle.ts), [`lambda/spa-static-host/handler.cjs`](./lambda/spa-static-host/handler.cjs).
 
-**Synth note:** With **`SPA_HOSTING=lambda`** or **`ec2`**, run **`npm run spa:build:<stage>`** first. CDK copies **`spa/dist`** on the host only (no Docker). Synth/deploy **fails** if **`spa/dist`** is missing.
+**Synth note:** With **`SPA_HOSTING=lambda`**, **`cloudfront`**, or **`ec2`**, run **`npm run spa:build:<stage>`** first. CDK copies **`spa/dist`** on the host only (no Docker). Synth/deploy **fails** if **`spa/dist`** is missing. **`cloudfront`** is not supported for **`stage=local`** (use **`lambda`** or **`none`**).
 
 ---
 

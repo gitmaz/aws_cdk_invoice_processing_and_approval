@@ -75,10 +75,12 @@ export class InvoiceProcessingStack extends cdk.Stack {
     const spaHosting =
       spaHostingMode !== "none" ? new SpaHostingConstruct(this, "SpaHosting", { stage, mode: spaHostingMode }) : undefined;
 
-    const spaBaseUrlForEmails =
-      spaHostingMode === "lambda" && spaHosting?.lambdaFunctionUrl
-        ? spaHosting.lambdaFunctionUrl
-        : config.spaBaseUrl.replace(/\/$/, "");
+    const spaBaseUrlForEmails = (() => {
+      const fallback = config.spaBaseUrl.replace(/\/$/, "");
+      if (spaHostingMode === "lambda" && spaHosting?.lambdaFunctionUrl) return spaHosting.lambdaFunctionUrl;
+      if (spaHostingMode === "cloudfront" && spaHosting?.cloudFrontUrl) return spaHosting.cloudFrontUrl;
+      return fallback;
+    })();
 
     const commonLambdaEnv = {
       INVOICES_TABLE_NAME: invoicesTable.tableName,
@@ -426,12 +428,12 @@ export class InvoiceProcessingStack extends cdk.Stack {
     new cdk.CfnOutput(this, "SpaHostingMode", {
       value: spaHostingMode,
       description:
-        "From SPA_HOSTING / -c spaHosting: none (no SPA in stack) | lambda (function URL) | ec2 (S3 for nginx sync)",
+        "From SPA_HOSTING / -c spaHosting: none | lambda (function URL) | cloudfront | ec2 (S3 for nginx sync)",
     });
     new cdk.CfnOutput(this, "SpaBaseUrlForEmails", {
       value: spaBaseUrlForEmails,
       description:
-        "Base URL in human-review emails (Lambda function URL when SPA_HOSTING=lambda, else config spaBaseUrl)",
+        "Base URL in human-review emails (auto when SPA_HOSTING=lambda or cloudfront; else config spaBaseUrl)",
     });
   }
 }

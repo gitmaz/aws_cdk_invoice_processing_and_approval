@@ -35,6 +35,11 @@ describe("resolveSpaHosting", () => {
     expect(mode("ec2", "lambda")).toBe("lambda");
   });
 
+  it("accepts cloudfront", () => {
+    expect(mode(undefined, "cloudfront")).toBe("cloudfront");
+    expect(mode("cloudfront")).toBe("cloudfront");
+  });
+
   it("throws on invalid mode", () => {
     expect(() => mode(undefined, "cdn")).toThrow(/Invalid SPA_HOSTING/);
   });
